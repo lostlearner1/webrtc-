@@ -17,7 +17,7 @@ export class WebRTC {
   /** RTC Message 事件 */
   public onMessage: (event: MessageEvent<string | ArrayBuffer>) => void;
   /** RTC Error 事件 */
-  public onError: (event: RTCErrorEvent) => void;
+  public onError: (event: RTCErrorEvent | Event) => void;
   /** RTC Close 事件 */
   public onClose: (event: Event) => void;
   /** RTC Connection State Change 事件 */
@@ -45,7 +45,7 @@ export class WebRTC {
     const onMessage = (event: MessageEvent<string | ArrayBuffer>) => {
       this.onMessage(event);
     };
-    const onError = (event: RTCErrorEvent) => {
+    const onError = (event: RTCErrorEvent | Event) => {
       this.onError(event);
     };
     const onClose = (e: Event) => {

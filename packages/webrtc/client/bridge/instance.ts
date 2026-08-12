@@ -55,7 +55,7 @@ export class WebRTCInstance {
       const channel = event.channel;
       channel.onopen = options.onOpen || null;
       channel.onmessage = options.onMessage || null;
-      channel.onerror = options.onError || null;
+      channel.onerror = (options.onError as (event: Event) => void) || null;
       channel.onclose = options.onClose || null;
     };
     this._resolver = () => null;

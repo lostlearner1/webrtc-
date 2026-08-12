@@ -8,12 +8,12 @@
     "dev:client": "rspack dev -c rspack.client.js",
     "build:client": "rspack build -c rspack.client.js",
     "dev:server": "nodemon --watch server --ext ts --exec \"tsx server/index.ts\"",
-    "build:server": "mkdir -p build && rollup -c rollup.server.js",
+    "build:server": "rollup -c rollup.server.js",
     "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
     "build": "rimraf build && npm run build:client && npm run build:server",
     "deploy": "npm run build && node build/server.js",
     "build:deploy": "npm run build && pnpm -F . --prod deploy ../../output",
-    "lint:ts": "../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json"
+    "lint:ts": "tsc --noEmit -p tsconfig.json"
   },
   "repository": {
     "type": "git",

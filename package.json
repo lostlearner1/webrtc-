@@ -11,7 +11,7 @@
     "dev:websocket": "pnpm --filter @ft/websocket run dev",
     "build:websocket": "pnpm --filter @ft/websocket run build",
     "deploy:websocket": "pnpm --filter @ft/websocket run deploy",
-    "lint:ts": "pnpm --filter '*' run lint:ts"
+    "lint:ts": "pnpm -r run lint:ts"
   },
   "repository": {
     "type": "git",

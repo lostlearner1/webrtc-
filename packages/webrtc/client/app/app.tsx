@@ -43,7 +43,7 @@ export const App: FC = () => {
     setState(CONNECTION_STATE.READY);
   });
 
-  const onError = useMemoFn((event: RTCErrorEvent) => {
+  const onError = useMemoFn((event: RTCErrorEvent | Event) => {
     console.log("OnError", event);
   });
 
