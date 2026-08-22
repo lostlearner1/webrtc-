@@ -1,7 +1,6 @@
 import styles from "../styles/index.module.scss";
 import type { FC } from "react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { IconGithub } from "@arco-design/web-react/icon";
 import { BoardCastIcon, ComputerIcon, PhoneIcon } from "../layout/icon";
 import { useMemoFn } from "laser-utils";
 import { WebRTC } from "../bridge/webrtc";
@@ -11,7 +10,9 @@ import { SERVER_EVENT } from "../../types/signaling";
 import type { ConnectionState, Member } from "../../types/client";
 import { CONNECTION_STATE, DEVICE_TYPE } from "../../types/client";
 import { TransferModal } from "./modal";
+import { QRCodeModal, QRScannerModal } from "./qr-modal";
 import { Message } from "@arco-design/web-react";
+import { IconQrcode, IconScan } from "@arco-design/web-react/icon";
 import { ERROR_TYPE } from "../../types/server";
 import { WorkerEvent } from "../worker/event";
 
@@ -23,6 +24,13 @@ export const App: FC = () => {
   const [visible, setVisible] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [state, setState] = useState<ConnectionState>(CONNECTION_STATE.INIT);
+  const [qrCodeVisible, setQrCodeVisible] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+
+  const connectParam = useMemo(() => {
+    const search = new URL(location.href).searchParams;
+    return search.get("connect") || search.get("target");
+  }, []);
 
   const streamMode = useMemo(() => {
     const search = new URL(location.href).searchParams;
@@ -106,6 +114,13 @@ export const App: FC = () => {
     webrtc.onReady = ({ rtc: instance }) => {
       rtc.current = instance;
       setState(CONNECTION_STATE.READY);
+      if (connectParam && connectParam !== webrtc.id) {
+        Message.info(`Auto-connecting to device: ${connectParam}`);
+        instance.connect(connectParam);
+        setVisible(true);
+        setPeerId(connectParam);
+        setState(CONNECTION_STATE.CONNECTING);
+      }
     };
     setId(webrtc.id);
     connection.current = webrtc;
@@ -118,6 +133,7 @@ export const App: FC = () => {
       webrtc.destroy();
     };
   }, [
+    connectParam,
     onClose,
     onError,
     onJoinRoom,
@@ -137,6 +153,20 @@ export const App: FC = () => {
     }
   };
 
+  const onScanPeer = (targetId: string) => {
+    if (!targetId) return;
+    if (targetId === id) {
+      Message.warning("Cannot connect to your own device ID");
+      return;
+    }
+    if (rtc.current) {
+      rtc.current.connect(targetId);
+      setVisible(true);
+      setPeerId(targetId);
+      setState(CONNECTION_STATE.CONNECTING);
+    }
+  };
+
   const onManualRequest = () => {
     setPeerId("");
     setVisible(true);
@@ -148,6 +178,16 @@ export const App: FC = () => {
         <div className={styles.boardCastIcon}>{BoardCastIcon}</div>
         <div>
           {streamMode && WorkerEvent.isTrustEnv() && "STREAM - "}Local ID: {id}
+        </div>
+        <div className={styles.actionGroup}>
+          <div className={styles.actionButton} onClick={() => setQrCodeVisible(true)}>
+            <IconQrcode style={{ marginRight: 4, alignSelf: "center" }} />
+            Show QR
+          </div>
+          <div className={styles.actionButton} onClick={() => setScannerVisible(true)}>
+            <IconScan style={{ marginRight: 4, alignSelf: "center" }} />
+            Scan QR
+          </div>
         </div>
         <div className={styles.manualEntry} onClick={onManualRequest}>
           Request To Establish P2P Connection By ID
@@ -166,13 +206,6 @@ export const App: FC = () => {
           </div>
         ))}
       </div>
-      <a
-        className={styles.github}
-        href="https://github.com/WindrunnerMax/FileTransfer"
-        target="_blank"
-      >
-        <IconGithub />
-      </a>
       {visible && (
         <TransferModal
           stream={streamMode}
@@ -187,6 +220,20 @@ export const App: FC = () => {
           visible={visible}
           setVisible={setVisible}
         ></TransferModal>
+      )}
+      {qrCodeVisible && (
+        <QRCodeModal
+          id={id}
+          visible={qrCodeVisible}
+          onClose={() => setQrCodeVisible(false)}
+        />
+      )}
+      {scannerVisible && (
+        <QRScannerModal
+          visible={scannerVisible}
+          onClose={() => setScannerVisible(false)}
+          onScan={onScanPeer}
+        />
       )}
     </div>
   );

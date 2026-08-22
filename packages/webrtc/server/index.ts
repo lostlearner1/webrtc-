@@ -11,6 +11,11 @@ import { getIpByRequest, getLocalIp } from "./utils";
 
 const app = express();
 app.use(express.static(path.resolve(__dirname, "static")));
+
+app.get("/api/info", (_req, res) => {
+  res.json({ ips: getLocalIp(), port: Number(process.env.PORT) || 3000 });
+});
+
 const httpServer = http.createServer(app);
 const io = new Server<ClientHandler, ServerHandler>(httpServer);
 

@@ -1,7 +1,6 @@
 import styles from "../styles/index.module.scss";
 import type { FC } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
-import { IconGithub } from "@arco-design/web-react/icon";
 import { BoardCastIcon, ComputerIcon, PhoneIcon } from "@ft/webrtc/client/layout/icon";
 import { useMemoFn } from "laser-utils";
 import type { ServerFn } from "../../types/websocket";
@@ -133,13 +132,6 @@ export const App: FC = () => {
           </div>
         ))}
       </div>
-      <a
-        className={styles.github}
-        href="https://github.com/WindrunnerMax/FileTransfer"
-        target="_blank"
-      >
-        <IconGithub />
-      </a>
       {visible && peerId && (
         <TransferModal
           client={client}

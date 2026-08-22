@@ -1,0 +1,137 @@
+.qrModal {
+  :global(.arco-modal) {
+    border-radius: 12px;
+    max-width: 90vw;
+  }
+}
+
+.qrContainer {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 10px 0 6px;
+
+  .qrWrapper {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+    display: flex;
+    justify-content: center;
+    padding: 14px;
+
+    .qrImage {
+      border-radius: 6px;
+      display: block;
+      height: 220px;
+      width: 220px;
+    }
+  }
+
+  .idBadge {
+    background: var(--color-fill-2);
+    border-radius: 20px;
+    color: var(--color-text-1);
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 6px 16px;
+  }
+
+  .hint {
+    color: var(--color-text-3);
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+    text-align: center;
+  }
+
+  .actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+    width: 100%;
+
+    button {
+      flex: 1;
+    }
+  }
+}
+
+.scannerContainer {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 0;
+
+  .videoWrapper {
+    background: #000000;
+    border-radius: 12px;
+    height: 280px;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+
+    video {
+      height: 100%;
+      object-fit: cover;
+      width: 100%;
+    }
+
+    .reticle {
+      border: 2px dashed rgba(255, 255, 255, 0.7);
+      border-radius: 12px;
+      height: 180px;
+      left: 50%;
+      pointer-events: none;
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 180px;
+
+      .laser {
+        animation: scan 2s linear infinite alternate;
+        background: linear-gradient(
+          to bottom,
+          rgba(var(--arcoblue-6), 0) 0%,
+          rgba(var(--arcoblue-6), 0.8) 50%,
+          rgba(var(--arcoblue-6), 1) 100%
+        );
+        box-shadow: 0 0 8px rgba(var(--arcoblue-6), 0.8);
+        height: 2px;
+        position: absolute;
+        width: 100%;
+      }
+    }
+  }
+
+  .scannerControls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .scannerError {
+    color: rgb(var(--red-6));
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .fileUploadTrigger {
+    color: rgba(var(--arcoblue-6), 0.9);
+    cursor: pointer;
+    font-size: 13px;
+    text-decoration: underline;
+  }
+}
+
+@keyframes scan {
+  0% {
+    top: 0%;
+  }
+  100% {
+    top: calc(100% - 2px);
+  }
+}
