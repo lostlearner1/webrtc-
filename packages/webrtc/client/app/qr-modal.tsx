@@ -14,17 +14,28 @@ import styles from "../styles/qr-modal.module.scss";
 export const parseQRCodeData = (data: string): string => {
   const trimmed = data.trim();
   if (!trimmed) return "";
+
+  let parsedUrl: URL | null = null;
   try {
-    const url = new URL(trimmed);
+    parsedUrl = new URL(trimmed);
+  } catch {
+    try {
+      if (trimmed.includes("?") || trimmed.includes("/")) {
+        parsedUrl = new URL(`http://${trimmed}`);
+      }
+    } catch {
+      parsedUrl = null;
+    }
+  }
+
+  if (parsedUrl) {
     const connectParam =
-      url.searchParams.get("connect") ||
-      url.searchParams.get("target") ||
-      url.searchParams.get("id");
+      parsedUrl.searchParams.get("connect") ||
+      parsedUrl.searchParams.get("target") ||
+      parsedUrl.searchParams.get("id");
     if (connectParam) {
       return connectParam.trim();
     }
-  } catch {
-    // Not a valid URL, treat as raw text/ID
   }
 
   // Handle prefix schemas like ft-peer:XXXX or peer:XXXX

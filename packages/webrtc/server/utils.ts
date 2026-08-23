@@ -42,14 +42,22 @@ export const getIpByRequest = (request: http.IncomingMessage) => {
   } else {
     ip = request.socket.remoteAddress || "";
   }
-  // 本地部署应用时, ip 地址可能是 ::1 或 ::ffff:
-  if (ip === "::1" || ip === "::ffff:127.0.0.1" || !ip) {
+
+  // Strip IPv6 prefix if present (e.g. ::ffff:10.193.212.221 -> 10.193.212.221)
+  if (ip.startsWith("::ffff:")) {
+    ip = ip.substring(7);
+  }
+
+  // Group local/LAN devices into matching rooms for automatic peer discovery
+  if (ip === "::1" || ip === "127.0.0.1" || !ip) {
     ip = "127.0.0.1";
-  }
-  // 局域网部署应用时, ip 地址可能是 192.168.x.x / 10.x.x.x / 172.16(31).x.x
-  // 目前 ipv6 中 fd00::/8 为内网地址, 这些暂时都先不处理了, 只处理 192.168 网段
-  if (ip.startsWith("::ffff:192.168") || ip.startsWith("192.168")) {
+  } else if (ip.startsWith("192.168.")) {
     ip = "192.168.0.0";
+  } else if (ip.startsWith("10.")) {
+    ip = "10.0.0.0";
+  } else if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)) {
+    ip = "172.16.0.0";
   }
+
   return ip;
 };
