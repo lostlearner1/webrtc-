@@ -40,11 +40,13 @@ export type TransferTypeMap = {
   [TRANSFER_TYPE.TEXT]: {
     data: string;
     from: Object.Values<typeof TRANSFER_FROM>;
+    targetId?: string;
   };
   [TRANSFER_TYPE.FILE]: Omit<FileMeta, "total"> & {
     name: string;
     progress: number;
     from: Object.Values<typeof TRANSFER_FROM>;
+    targetId?: string;
   };
 };
 

@@ -6,18 +6,20 @@ export type WebRTCCallback = (p: { signaling: SignalingServer; rtc: WebRTCApi })
 
 export type WebRTCApi = {
   connect: (id: string) => Promise<void>;
-  send: (message: string | ArrayBuffer) => void;
-  close: () => void;
-  getInstance: () => WebRTCInstance | null;
+  send: (message: string | ArrayBuffer, targetId?: string) => void;
+  close: (targetId?: string) => void;
+  getInstance: (targetId: string) => WebRTCInstance | null;
+  getInstances: () => Map<string, WebRTCInstance>;
 };
 
 export type WebRTCInstanceOptions = {
   ice?: string;
   signaling: SignalingServer;
-  id: string;
-  onOpen?: (event: Event) => void;
-  onMessage?: (event: MessageEvent) => void;
-  onError?: (event: RTCErrorEvent | Event) => void;
-  onClose?: (event: Event) => void;
-  onConnectionStateChange: (pc: RTCPeerConnection) => void;
+  id: string; // The local ID
+  targetId: string; // The remote peer ID this instance connects to
+  onOpen?: (event: Event, targetId: string) => void;
+  onMessage?: (event: MessageEvent, targetId: string) => void;
+  onError?: (event: RTCErrorEvent | Event, targetId: string) => void;
+  onClose?: (event: Event, targetId: string) => void;
+  onConnectionStateChange: (pc: RTCPeerConnection, targetId: string) => void;
 };

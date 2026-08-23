@@ -20,7 +20,7 @@ export const App: FC = () => {
   const rtc = useRef<WebRTCApi | null>(null);
   const connection = useRef<WebRTC | null>(null);
   const [id, setId] = useState("");
-  const [peerId, setPeerId] = useState("");
+  const [peerIds, setPeerIds] = useState<string[]>([]);
   const [visible, setVisible] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [state, setState] = useState<ConnectionState>(CONNECTION_STATE.INIT);
@@ -38,17 +38,23 @@ export const App: FC = () => {
   }, []);
 
   // === RTC Connection Event ===
-  const onOpen = useMemoFn(event => {
-    console.log("OnOpen", event);
+  const onOpen = useMemoFn((event: Event, targetId: string) => {
+    console.log("OnOpen", event, targetId);
     setVisible(true);
+    setPeerIds(prev => Array.from(new Set([...prev, targetId])));
     setState(CONNECTION_STATE.CONNECTED);
   });
 
-  const onClose = useMemoFn((event: Event) => {
-    console.log("OnClose", event);
-    setVisible(false);
-    setPeerId("");
-    setState(CONNECTION_STATE.READY);
+  const onClose = useMemoFn((event: Event, targetId: string) => {
+    console.log("OnClose", event, targetId);
+    setPeerIds(prev => {
+      const next = prev.filter(id => id !== targetId);
+      if (next.length === 0) {
+        setVisible(false);
+        setState(CONNECTION_STATE.READY);
+      }
+      return next;
+    });
   });
 
   const onError = useMemoFn((event: RTCErrorEvent | Event) => {
@@ -69,22 +75,20 @@ export const App: FC = () => {
   const onLeftRoom: ServerFn<typeof SERVER_EVENT.LEFT_ROOM> = useMemoFn(event => {
     const { id: leaveId } = event;
     console.log("LEFT ROOM", leaveId);
-    const instance = rtc.current?.getInstance();
+    const instance = rtc.current?.getInstance(leaveId);
     // FIX: 移动端切换后台可能会导致 signaling 关闭
     // 但是此时 RTC 仍处于连接活跃状态 需要等待信令切换到前台重连
     // 这种情况下后续的状态控制由 RTC 的 OnClose 等事件来处理更新
-    if (leaveId === peerId && instance?.connection.connectionState !== "connected") {
-      rtc.current?.close();
-      setVisible(false);
-      setPeerId("");
+    if (peerIds.includes(leaveId) && instance?.connection.connectionState !== "connected") {
+      rtc.current?.close(leaveId);
     }
     setMembers(members.filter(member => member.id !== leaveId));
   });
 
   const onReceiveOffer: ServerFn<typeof SERVER_EVENT.FORWARD_OFFER> = useMemoFn(event => {
     const { origin } = event;
-    if (!peerId && !visible) {
-      setPeerId(origin);
+    if (!peerIds.includes(origin)) {
+      setPeerIds(prev => Array.from(new Set([...prev, origin])));
       setVisible(true);
       setState(CONNECTION_STATE.CONNECTING);
     }
@@ -118,7 +122,7 @@ export const App: FC = () => {
         Message.info(`Auto-connecting to device: ${connectParam}`);
         instance.connect(connectParam);
         setVisible(true);
-        setPeerId(connectParam);
+        setPeerIds(prev => Array.from(new Set([...prev, connectParam])));
         setState(CONNECTION_STATE.CONNECTING);
       }
     };
@@ -145,10 +149,10 @@ export const App: FC = () => {
   ]);
 
   const onPeerConnection = (member: Member) => {
-    if (rtc.current) {
+    if (rtc.current && !peerIds.includes(member.id)) {
       rtc.current.connect(member.id);
       setVisible(true);
-      setPeerId(member.id);
+      setPeerIds(prev => Array.from(new Set([...prev, member.id])));
       setState(CONNECTION_STATE.CONNECTING);
     }
   };
@@ -159,16 +163,15 @@ export const App: FC = () => {
       Message.warning("Cannot connect to your own device ID");
       return;
     }
-    if (rtc.current) {
+    if (rtc.current && !peerIds.includes(targetId)) {
       rtc.current.connect(targetId);
       setVisible(true);
-      setPeerId(targetId);
+      setPeerIds(prev => Array.from(new Set([...prev, targetId])));
       setState(CONNECTION_STATE.CONNECTING);
     }
   };
 
   const onManualRequest = () => {
-    setPeerId("");
     setVisible(true);
   };
 
@@ -213,8 +216,8 @@ export const App: FC = () => {
           rtc={rtc}
           id={id}
           setId={setId}
-          peerId={peerId}
-          setPeerId={setPeerId}
+          peerIds={peerIds}
+          setPeerIds={setPeerIds}
           state={state}
           setState={setState}
           visible={visible}

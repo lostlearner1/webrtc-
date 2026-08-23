@@ -12,9 +12,10 @@ export const FILE_STATE: Map<string, FileMeta & { series: number }> = new Map();
 
 export const getMaxMessageSize = (
   rtc: React.MutableRefObject<WebRTCApi | null>,
+  targetId?: string,
   origin = false
 ) => {
-  const instance = rtc.current?.getInstance();
+  const instance = targetId ? rtc.current?.getInstance(targetId) : Array.from(rtc.current?.getInstances()?.values() || [])[0];
   let maxSize = instance?.connection.sctp?.maxMessageSize || 64 * 1024;
   // https://developer.mozilla.org/en-US/docs/Web/API/RTCSctpTransport/maxMessageSize
   // https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Using_data_channels
@@ -33,10 +34,11 @@ export const getMaxMessageSize = (
 export const serializeNextChunk = (
   instance: React.MutableRefObject<WebRTCApi | null>,
   id: string,
-  series: number
+  series: number,
+  targetId: string
 ) => {
   const file = FILE_HANDLE.get(id);
-  const chunkSize = getMaxMessageSize(instance);
+  const chunkSize = getMaxMessageSize(instance, targetId);
   if (!file) return new Blob([new ArrayBuffer(chunkSize)]);
   const start = series * chunkSize;
   const end = Math.min(start + chunkSize, file.size);
@@ -53,21 +55,25 @@ export const serializeNextChunk = (
 };
 
 let isSending = false;
-const QUEUE_TASK: BufferType[] = [];
+const QUEUE_TASK: { chunk: BufferType; targetId?: string }[] = [];
 const start = async (rtc: React.MutableRefObject<WebRTCApi | null>) => {
   isSending = true;
-  const chunkSize = getMaxMessageSize(rtc, true);
-  const instance = rtc.current?.getInstance();
-  const channel = instance?.channel;
   while (QUEUE_TASK.length) {
     const next = QUEUE_TASK.shift();
-    if (next && channel && rtc.current) {
-      if (channel.bufferedAmount >= chunkSize) {
+    if (next && rtc.current && next.targetId) {
+      const instance = rtc.current.getInstance(next.targetId);
+      const channel = instance?.channel;
+      const chunkSize = getMaxMessageSize(rtc, next.targetId, true);
+      if (channel && channel.bufferedAmount >= chunkSize) {
         await new Promise(resolve => {
           channel.onbufferedamountlow = () => resolve(0);
         });
       }
-      const buffer = next instanceof Blob ? await next.arrayBuffer() : next;
+      const buffer = next.chunk instanceof Blob ? await next.chunk.arrayBuffer() : next.chunk;
+      buffer && rtc.current.send(buffer, next.targetId);
+    } else if (next && rtc.current) {
+      // Fallback for broadcast, though sendChunkMessage shouldn't broadcast without targetId typically
+      const buffer = next.chunk instanceof Blob ? await next.chunk.arrayBuffer() : next.chunk;
       buffer && rtc.current.send(buffer);
     } else {
       break;
@@ -78,10 +84,11 @@ const start = async (rtc: React.MutableRefObject<WebRTCApi | null>) => {
 
 export const sendChunkMessage = async (
   rtc: React.MutableRefObject<WebRTCApi | null>,
-  chunk: BufferType
+  chunk: BufferType,
+  targetId?: string
 ) => {
   // 实现分片传输队列
-  QUEUE_TASK.push(chunk);
+  QUEUE_TASK.push({ chunk, targetId });
   !isSending && start(rtc);
 };
 

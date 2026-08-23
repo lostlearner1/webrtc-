@@ -30,8 +30,8 @@ export const TransferModal: FC<{
   rtc: React.MutableRefObject<WebRTCApi | null>;
   id: string;
   setId: (id: string) => void;
-  peerId: string;
-  setPeerId: (id: string) => void;
+  peerIds: string[];
+  setPeerIds: (ids: string[]) => void;
   state: ConnectionState;
   setState: (state: ConnectionState) => void;
   visible: boolean;
@@ -42,10 +42,10 @@ export const TransferModal: FC<{
     connection,
     rtc,
     state,
-    peerId,
+    peerIds,
     visible,
     setVisible,
-    setPeerId,
+    setPeerIds,
     setState,
   } = props;
   const listRef = useRef<HTMLDivElement>(null);
@@ -60,8 +60,8 @@ export const TransferModal: FC<{
     setVisible(false);
   };
 
-  const sendTextMessage = (message: MessageType) => {
-    rtc.current?.send(TSON.encode(message));
+  const sendTextMessage = (message: MessageType, targetId?: string) => {
+    rtc.current?.send(TSON.encode(message), targetId);
   };
 
   const updateFileProgress = (id: string, progress: number) => {
@@ -75,14 +75,14 @@ export const TransferModal: FC<{
     );
   };
 
-  const onMessage = useMemoFn(async (event: MessageEvent<string | BufferType>) => {
+  const onMessage = useMemoFn(async (event: MessageEvent<string | BufferType>, targetId: string) => {
     if (isString(event.data)) {
       // String - 接收文本类型数据
       const data = TSON.decode(event.data);
       if (!data) return void 0;
       if (data.key === MESSAGE_TYPE.TEXT) {
         // 收到 发送方 的文本消息
-        setList(prev => [...prev, { from: TRANSFER_FROM.PEER, ...data }]);
+        setList(prev => [...prev, { from: TRANSFER_FROM.PEER, targetId, ...data }]);
         scrollToBottom(listRef);
       } else if (data.key === MESSAGE_TYPE.FILE_START) {
         // 收到 发送方 传输起始消息 准备接收数据
@@ -90,10 +90,10 @@ export const TransferModal: FC<{
         FILE_STATE.set(id, { series: 0, ...data });
         setList(prev => [
           ...prev,
-          { key: TRANSFER_TYPE.FILE, from: TRANSFER_FROM.PEER, name, size, progress: 0, id },
+          { key: TRANSFER_TYPE.FILE, from: TRANSFER_FROM.PEER, targetId, name, size, progress: 0, id },
         ]);
         // 通知 发送方 发送首个块
-        sendTextMessage({ key: MESSAGE_TYPE.FILE_NEXT, id, series: 0, size, total });
+        sendTextMessage({ key: MESSAGE_TYPE.FILE_NEXT, id, series: 0, size, total }, targetId);
         stream && WorkerEvent.start(id, name, size, total);
         scrollToBottom(listRef);
       } else if (data.key === MESSAGE_TYPE.FILE_NEXT) {
@@ -103,7 +103,7 @@ export const TransferModal: FC<{
         updateFileProgress(id, progress);
         const nextChunk = serializeNextChunk(rtc, id, series);
         // 向目标 接收方 发送块数据
-        sendChunkMessage(rtc, nextChunk);
+        sendChunkMessage(rtc, nextChunk, targetId);
       } else if (data.key === MESSAGE_TYPE.FILE_FINISH) {
         // 收到 接收方 的接收完成消息
         const { id } = data;
@@ -123,7 +123,7 @@ export const TransferModal: FC<{
       updateFileProgress(id, progress);
       if (series >= total) {
         // 数据接收完毕 通知 发送方 接收完毕
-        sendTextMessage({ key: MESSAGE_TYPE.FILE_FINISH, id });
+        sendTextMessage({ key: MESSAGE_TYPE.FILE_FINISH, id }, targetId);
         stream && WorkerEvent.close(id);
       } else {
         // 数据块序列号 [0, TOTAL)
@@ -136,7 +136,7 @@ export const TransferModal: FC<{
           FILE_MAPPER.set(id, mapper);
         }
         // 通知 发送方 发送下一个序列块
-        sendTextMessage({ key: MESSAGE_TYPE.FILE_NEXT, id, series: series + 1, size, total });
+        sendTextMessage({ key: MESSAGE_TYPE.FILE_NEXT, id, series: series + 1, size, total }, targetId);
       }
       return void 0;
     }
@@ -176,7 +176,7 @@ export const TransferModal: FC<{
 
   const onSendText = () => {
     if (rtc.current && text) {
-      sendTextMessage({ key: MESSAGE_TYPE.TEXT, data: text });
+      sendTextMessage({ key: MESSAGE_TYPE.TEXT, data: text }); // Broadcast
       setList(prev => [...prev, { key: TRANSFER_TYPE.TEXT, from: TRANSFER_FROM.SELF, data: text }]);
       setText("");
       scrollToBottom(listRef);
@@ -195,7 +195,7 @@ export const TransferModal: FC<{
       const id = getUniqueId(ID_SIZE);
       const size = file.size;
       const total = Math.ceil(file.size / maxChunkSize);
-      sendTextMessage({ key: MESSAGE_TYPE.FILE_START, id, name, size, total });
+      sendTextMessage({ key: MESSAGE_TYPE.FILE_START, id, name, size, total }); // Broadcast
       FILE_HANDLE.set(id, file);
       newItems.push({
         key: TRANSFER_TYPE.FILE,
@@ -290,9 +290,9 @@ export const TransferModal: FC<{
   };
 
   const onConnectPeer = () => {
-    if (toConnectId && rtc.current) {
+    if (toConnectId && rtc.current && !peerIds.includes(toConnectId)) {
       rtc.current.connect(toConnectId);
-      setPeerId(toConnectId);
+      setPeerIds([...peerIds, toConnectId]);
       setState(CONNECTION_STATE.CONNECTING);
     }
   };
@@ -332,14 +332,14 @@ export const TransferModal: FC<{
                     : "rgb(var(--gray-6))",
               }}
             ></div>
-            {peerId
+            {peerIds.length > 0
               ? state === CONNECTION_STATE.READY
-                ? "Disconnected: " + peerId
+                ? "Disconnected"
                 : state === CONNECTION_STATE.CONNECTING
-                ? "Connecting: " + peerId
+                ? "Connecting..."
                 : state === CONNECTION_STATE.CONNECTED
-                ? "Connected: " + peerId
-                : "Unknown State: " + peerId
+                ? `Group Chat: ${peerIds.join(", ")}`
+                : "Unknown State"
               : "Please Establish Connection"}
           </div>
           {completedReceivedFiles.length > 1 && (
@@ -382,6 +382,9 @@ export const TransferModal: FC<{
             )}
           >
             <div className={styles.messageContent}>
+              {item.from === TRANSFER_FROM.PEER && item.targetId && (
+                <div style={{ fontSize: '10px', color: '#999', marginBottom: '2px' }}>{item.targetId}</div>
+              )}
               {item.key === TRANSFER_TYPE.TEXT ? (
                 <span>{item.data}</span>
               ) : (
@@ -412,12 +415,12 @@ export const TransferModal: FC<{
       </div>
       <div
         className={styles.modalFooter}
-        onDragEnter={() => peerId && setIsDragging(true)}
+        onDragEnter={() => peerIds.length > 0 && setIsDragging(true)}
         onDragLeave={() => setIsDragging(false)}
         onDrop={onDropFiles}
         onDragOver={e => e.preventDefault()}
       >
-        {peerId ? (
+        {peerIds.length > 0 ? (
           isDragging ? (
             <Fragment>Drop Multiple Files or Folders To Upload</Fragment>
           ) : (

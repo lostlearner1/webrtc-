@@ -11,6 +11,8 @@ export class WebRTCInstance {
   public readonly channel: RTCDataChannel;
   /** RTC 连接实例 */
   public readonly connection: RTCPeerConnection;
+  /** 目标 id */
+  public readonly targetId: string;
   /** 信令实例 */
   private readonly signaling: SignalingServer;
   /** 主动连接建立信号 */
@@ -43,6 +45,7 @@ export class WebRTCInstance {
       iceServers: options.ice ? [{ urls: options.ice }] : defaultIces,
     });
     this.id = options.id;
+    this.targetId = options.targetId;
     this.signaling = options.signaling;
     console.log("Client WebRTC ID:", this.id);
     const channel = connection.createDataChannel("FileTransfer", {
@@ -50,13 +53,18 @@ export class WebRTCInstance {
       maxRetransmits: 50, // 最大重传次数
     });
     this.channel = channel;
+    this.channel.onopen = options.onOpen ? e => options.onOpen!(e, options.targetId) : null;
+    this.channel.onmessage = options.onMessage ? e => options.onMessage!(e, options.targetId) : null;
+    this.channel.onerror = options.onError ? (e: Event) => options.onError!(e, options.targetId) : null;
+    this.channel.onclose = options.onClose ? e => options.onClose!(e, options.targetId) : null;
+
     this.connection = connection;
     this.connection.ondatachannel = event => {
       const channel = event.channel;
-      channel.onopen = options.onOpen || null;
-      channel.onmessage = options.onMessage || null;
-      channel.onerror = (options.onError as (event: Event) => void) || null;
-      channel.onclose = options.onClose || null;
+      channel.onopen = options.onOpen ? e => options.onOpen!(e, options.targetId) : null;
+      channel.onmessage = options.onMessage ? e => options.onMessage!(e, options.targetId) : null;
+      channel.onerror = options.onError ? (e: Event) => options.onError!(e, options.targetId) : null;
+      channel.onclose = options.onClose ? e => options.onClose!(e, options.targetId) : null;
     };
     this._resolver = () => null;
     this.ready = new Promise(r => (this._resolver = r));
@@ -64,7 +72,7 @@ export class WebRTCInstance {
       if (this.connection.connectionState === "connected") {
         this._resolver();
       }
-      options.onConnectionStateChange(connection);
+      options.onConnectionStateChange(connection, options.targetId);
     };
     this.signaling.on(SERVER_EVENT.FORWARD_OFFER, this.onReceiveOffer);
     this.signaling.on(SERVER_EVENT.FORWARD_ICE, this.onReceiveIce);
@@ -87,8 +95,9 @@ export class WebRTCInstance {
     this.signaling.emit(CLINT_EVENT.SEND_OFFER, payload);
   };
 
-  private onReceiveOffer = async (params: SocketEventParams["FORWARD_OFFER"]) => {
+  public onReceiveOffer = async (params: SocketEventParams["FORWARD_OFFER"]) => {
     const { offer, origin } = params;
+    if (origin !== this.targetId) return;
     console.log("Receive Offer From:", origin, offer);
     if (this.connection.currentLocalDescription || this.connection.currentRemoteDescription) {
       this.signaling.emit(CLINT_EVENT.SEND_ERROR, {
@@ -115,12 +124,14 @@ export class WebRTCInstance {
 
   private onReceiveIce = async (params: SocketEventParams["FORWARD_ICE"]) => {
     const { ice, origin } = params;
+    if (origin !== this.targetId) return;
     console.log("Receive ICE From:", origin, ice);
     await this.connection.addIceCandidate(ice);
   };
 
   private onReceiveAnswer = async (params: SocketEventParams["FORWARD_ANSWER"]) => {
     const { answer, origin } = params;
+    if (origin !== this.targetId) return;
     console.log("Receive Answer From:", origin, answer);
     if (!this.connection.currentRemoteDescription) {
       this.connection.setRemoteDescription(answer);
