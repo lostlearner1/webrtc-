@@ -1,11 +1,11 @@
 import type { WebRTCApi } from "../../types/webrtc";
 import styles from "../styles/modal.module.scss";
 import type { FC } from "react";
-import React, { Fragment, useEffect, useRef, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { BufferType, ConnectionState, MessageType, TransferType } from "../../types/client";
 import { CONNECTION_STATE, MESSAGE_TYPE, TRANSFER_FROM, TRANSFER_TYPE } from "../../types/client";
-import { Button, Input, Modal, Progress } from "@arco-design/web-react";
-import { IconFile, IconRight, IconSend, IconToBottom } from "@arco-design/web-react/icon";
+import { Button, Input, Modal, Progress, Tooltip, Message as ArcoMessage } from "@arco-design/web-react";
+import { IconDownload, IconFile, IconFolder, IconRight, IconSend, IconToBottom } from "@arco-design/web-react/icon";
 import type { WebRTC } from "../bridge/webrtc";
 import { useMemoFn } from "laser-utils";
 import { cs, getUniqueId, isString } from "laser-utils";
@@ -64,30 +64,32 @@ export const TransferModal: FC<{
     rtc.current?.send(TSON.encode(message));
   };
 
-  const updateFileProgress = (id: string, progress: number, newList = list) => {
-    const last = newList.find(item => item.key === TRANSFER_TYPE.FILE && item.id === id);
-    if (last && last.key === TRANSFER_TYPE.FILE) {
-      last.progress = progress;
-      setList([...newList]);
-    }
+  const updateFileProgress = (id: string, progress: number) => {
+    setList(prev =>
+      prev.map(item => {
+        if (item.key === TRANSFER_TYPE.FILE && item.id === id) {
+          return { ...item, progress };
+        }
+        return item;
+      })
+    );
   };
 
   const onMessage = useMemoFn(async (event: MessageEvent<string | BufferType>) => {
     if (isString(event.data)) {
       // String - 接收文本类型数据
       const data = TSON.decode(event.data);
-      console.log("OnTextMessage", data);
       if (!data) return void 0;
       if (data.key === MESSAGE_TYPE.TEXT) {
         // 收到 发送方 的文本消息
-        setList([...list, { from: TRANSFER_FROM.PEER, ...data }]);
+        setList(prev => [...prev, { from: TRANSFER_FROM.PEER, ...data }]);
         scrollToBottom(listRef);
       } else if (data.key === MESSAGE_TYPE.FILE_START) {
         // 收到 发送方 传输起始消息 准备接收数据
         const { id, name, size, total } = data;
         FILE_STATE.set(id, { series: 0, ...data });
-        setList([
-          ...list,
+        setList(prev => [
+          ...prev,
           { key: TRANSFER_TYPE.FILE, from: TRANSFER_FROM.PEER, name, size, progress: 0, id },
         ]);
         // 通知 发送方 发送首个块
@@ -114,12 +116,9 @@ export const TransferModal: FC<{
       // Binary - 接收 发送方 ArrayBuffer 数据
       const blob = event.data;
       const { id, series, data } = await deserializeChunk(blob);
-      // FIX: 在此处只打印关键信息即可 如果全部打印会导致内存占用上升
-      // 控制台会实际持有 Buffer 数据 传输文件时会导致占用大量内存
-      console.log("OnBinaryMessage", { id, series });
-      const state = FILE_STATE.get(id);
-      if (!state) return void 0;
-      const { size, total } = state;
+      const fileState = FILE_STATE.get(id);
+      if (!fileState) return void 0;
+      const { size, total } = fileState;
       const progress = Math.floor((series / total) * 100);
       updateFileProgress(id, progress);
       if (series >= total) {
@@ -178,23 +177,27 @@ export const TransferModal: FC<{
   const onSendText = () => {
     if (rtc.current && text) {
       sendTextMessage({ key: MESSAGE_TYPE.TEXT, data: text });
-      setList([...list, { key: TRANSFER_TYPE.TEXT, from: TRANSFER_FROM.SELF, data: text }]);
+      setList(prev => [...prev, { key: TRANSFER_TYPE.TEXT, from: TRANSFER_FROM.SELF, data: text }]);
       setText("");
       scrollToBottom(listRef);
     }
   };
 
-  const sendFilesBySlice = async (files: FileList) => {
+  const sendFilesBySlice = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (!fileArray.length) return;
+
     const maxChunkSize = getMaxMessageSize(rtc);
-    const newList = [...list];
-    for (const file of files) {
+    const newItems: TransferType[] = [];
+
+    for (const file of fileArray) {
       const name = file.name;
       const id = getUniqueId(ID_SIZE);
       const size = file.size;
       const total = Math.ceil(file.size / maxChunkSize);
       sendTextMessage({ key: MESSAGE_TYPE.FILE_START, id, name, size, total });
       FILE_HANDLE.set(id, file);
-      newList.push({
+      newItems.push({
         key: TRANSFER_TYPE.FILE,
         from: TRANSFER_FROM.SELF,
         name,
@@ -203,8 +206,13 @@ export const TransferModal: FC<{
         id,
       } as const);
     }
-    setList(newList);
+
+    setList(prev => [...prev, ...newItems]);
     scrollToBottom(listRef);
+
+    if (fileArray.length > 1) {
+      ArcoMessage.info(`Sending ${fileArray.length} files...`);
+    }
   };
 
   const onSendFile = () => {
@@ -216,6 +224,26 @@ export const TransferModal: FC<{
     input.setAttribute("type", "file");
     input.setAttribute("class", styles.fileInput);
     input.setAttribute("accept", "*");
+    input.setAttribute("multiple", "true");
+    !exist && document.body.append(input);
+    input.onchange = e => {
+      const target = e.target as HTMLInputElement;
+      document.body.removeChild(input);
+      const files = target.files;
+      files && sendFilesBySlice(files);
+    };
+    input.click();
+  };
+
+  const onSendFolder = () => {
+    const KEY = "webrtc-folder-input";
+    const exist = document.querySelector(`body > [data-type='${KEY}']`) as HTMLInputElement;
+    const input: HTMLInputElement = exist || document.createElement("input");
+    input.value = "";
+    input.setAttribute("data-type", KEY);
+    input.setAttribute("type", "file");
+    input.setAttribute("class", styles.fileInput);
+    input.setAttribute("webkitdirectory", "true");
     input.setAttribute("multiple", "true");
     !exist && document.body.append(input);
     input.onchange = e => {
@@ -239,6 +267,28 @@ export const TransferModal: FC<{
     URL.revokeObjectURL(url);
   };
 
+  // Download all completed received files
+  const completedReceivedFiles = useMemo(() => {
+    return list.filter(
+      item =>
+        item.key === TRANSFER_TYPE.FILE &&
+        item.from === TRANSFER_FROM.PEER &&
+        item.progress === 100
+    );
+  }, [list]);
+
+  const onDownloadAll = () => {
+    if (!completedReceivedFiles.length) return;
+    completedReceivedFiles.forEach((item, index) => {
+      if (item.key === TRANSFER_TYPE.FILE) {
+        setTimeout(() => {
+          onDownloadFile(item.id, item.name);
+        }, index * 250);
+      }
+    });
+    ArcoMessage.success(`Downloading ${completedReceivedFiles.length} files`);
+  };
+
   const onConnectPeer = () => {
     if (toConnectId && rtc.current) {
       rtc.current.connect(toConnectId);
@@ -257,33 +307,53 @@ export const TransferModal: FC<{
 
   const enableTransfer = state === CONNECTION_STATE.CONNECTED;
 
+  // Batch transfer stats
+  const totalFiles = list.filter(item => item.key === TRANSFER_TYPE.FILE).length;
+  const inProgressFiles = list.filter(
+    item => item.key === TRANSFER_TYPE.FILE && item.progress < 100
+  ).length;
+
   return (
     <Modal
       className={styles.modal}
       title={
         <div className={styles.title}>
-          <div
-            className={styles.dot}
-            style={{
-              backgroundColor:
-                state === CONNECTION_STATE.READY
-                  ? "rgb(var(--red-6))"
-                  : state === CONNECTION_STATE.CONNECTING
-                  ? "rgb(var(--orange-6))"
-                  : state === CONNECTION_STATE.CONNECTED
-                  ? "rgb(var(--green-6))"
-                  : "rgb(var(--gray-6))",
-            }}
-          ></div>
-          {peerId
-            ? state === CONNECTION_STATE.READY
-              ? "Disconnected: " + peerId
-              : state === CONNECTION_STATE.CONNECTING
-              ? "Connecting: " + peerId
-              : state === CONNECTION_STATE.CONNECTED
-              ? "Connected: " + peerId
-              : "Unknown State: " + peerId
-            : "Please Establish Connection"}
+          <div className={styles.titleLeft}>
+            <div
+              className={styles.dot}
+              style={{
+                backgroundColor:
+                  state === CONNECTION_STATE.READY
+                    ? "rgb(var(--red-6))"
+                    : state === CONNECTION_STATE.CONNECTING
+                    ? "rgb(var(--orange-6))"
+                    : state === CONNECTION_STATE.CONNECTED
+                    ? "rgb(var(--green-6))"
+                    : "rgb(var(--gray-6))",
+              }}
+            ></div>
+            {peerId
+              ? state === CONNECTION_STATE.READY
+                ? "Disconnected: " + peerId
+                : state === CONNECTION_STATE.CONNECTING
+                ? "Connecting: " + peerId
+                : state === CONNECTION_STATE.CONNECTED
+                ? "Connected: " + peerId
+                : "Unknown State: " + peerId
+              : "Please Establish Connection"}
+          </div>
+          {completedReceivedFiles.length > 1 && (
+            <div className={styles.batchActions}>
+              <Button
+                size="mini"
+                type="outline"
+                icon={<IconDownload />}
+                onClick={onDownloadAll}
+              >
+                Download All ({completedReceivedFiles.length})
+              </Button>
+            </div>
+          )}
         </div>
       }
       visible={visible}
@@ -291,6 +361,17 @@ export const TransferModal: FC<{
       onCancel={onCancel}
       maskClosable={false}
     >
+      {totalFiles > 1 && inProgressFiles > 0 && (
+        <div className={styles.batchSummaryBar}>
+          <div className={styles.batchInfo}>
+            <span>
+              Transferring: <strong>{inProgressFiles}</strong> of{" "}
+              <strong>{totalFiles}</strong> files active
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className={styles.modalContent} ref={listRef}>
         {list.map((item, index) => (
           <div
@@ -338,24 +419,36 @@ export const TransferModal: FC<{
       >
         {peerId ? (
           isDragging ? (
-            <Fragment>Drop Files To Upload</Fragment>
+            <Fragment>Drop Multiple Files or Folders To Upload</Fragment>
           ) : (
             <Fragment>
-              <Button
-                disabled={!enableTransfer}
-                type="primary"
-                icon={<IconFile />}
-                className={styles.sendFile}
-                onClick={onSendFile}
-              >
-                File
-              </Button>
+              <div className={styles.sendFileGroup}>
+                <Tooltip content="Select multiple files">
+                  <Button
+                    disabled={!enableTransfer}
+                    type="primary"
+                    icon={<IconFile />}
+                    onClick={onSendFile}
+                  >
+                    Files
+                  </Button>
+                </Tooltip>
+                <Tooltip content="Select entire folder">
+                  <Button
+                    disabled={!enableTransfer}
+                    icon={<IconFolder />}
+                    onClick={onSendFolder}
+                  >
+                    Folder
+                  </Button>
+                </Tooltip>
+              </div>
               <Input
                 value={text}
                 onChange={setText}
                 disabled={!enableTransfer}
                 allowClear
-                placeholder="Send Message"
+                placeholder="Send Message or Drag & Drop Multiple Files"
                 onPressEnter={onSendText}
               />
               <Button
