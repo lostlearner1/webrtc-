@@ -8,6 +8,7 @@ const CLINT_EVENT_BASE = [
   "SEND_ANSWER",
   "SEND_ICE",
   "SEND_ERROR",
+  "SEND_MESSAGE",
 ] as const;
 
 const SERVER_EVENT_BASE = [
@@ -17,6 +18,7 @@ const SERVER_EVENT_BASE = [
   "FORWARD_OFFER",
   "FORWARD_ANSWER",
   "FORWARD_ICE",
+  "FORWARD_MESSAGE",
   "NOTIFY_ERROR",
 ] as const;
 
@@ -75,6 +77,11 @@ export interface SocketEventParams {
     code: ErrorType;
     message: string;
   };
+  [CLINT_EVENT.SEND_MESSAGE]: {
+    origin: string;
+    target: string;
+    message: string | ArrayBuffer;
+  };
 
   // SERVER
   [SERVER_EVENT.JOINED_ROOM]: {
@@ -104,6 +111,11 @@ export interface SocketEventParams {
     origin: string;
     target: string;
     ice: RTCIceCandidateInit;
+  };
+  [SERVER_EVENT.FORWARD_MESSAGE]: {
+    origin: string;
+    target: string;
+    message: string | ArrayBuffer;
   };
   [SERVER_EVENT.NOTIFY_ERROR]: {
     code: ErrorType;

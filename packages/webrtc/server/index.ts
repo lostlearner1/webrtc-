@@ -17,7 +17,9 @@ app.get("/api/info", (_req, res) => {
 });
 
 const httpServer = http.createServer(app);
-const io = new Server<ClientHandler, ServerHandler>(httpServer);
+const io = new Server<ClientHandler, ServerHandler>(httpServer, {
+  maxHttpBufferSize: 1e8, // 100MB buffer for fallback relay
+});
 
 const authenticate = new WeakMap<ServerSocket, string>();
 const mapper = new Map<string, Member>();
@@ -68,6 +70,19 @@ io.on("connection", socket => {
     const targetSocket = mapper.get(target)?.socket;
     if (targetSocket) {
       targetSocket.emit(SERVER_EVENT.FORWARD_ICE, { origin, ice, target });
+
+      // If the ICE candidate is an mDNS .local candidate, also send augmented real IP candidate
+      if (ice && ice.candidate && ice.candidate.includes(".local")) {
+        let senderIp = socket.request.socket.remoteAddress || "";
+        if (senderIp.startsWith("::ffff:")) senderIp = senderIp.substring(7);
+        if (senderIp && senderIp !== "127.0.0.1" && senderIp !== "::1") {
+          const augmentedCandidate = {
+            ...ice,
+            candidate: ice.candidate.replace(/[a-zA-Z0-9-]+\.local/g, senderIp),
+          };
+          targetSocket.emit(SERVER_EVENT.FORWARD_ICE, { origin, ice: augmentedCandidate, target });
+        }
+      }
     }
   });
 
@@ -78,6 +93,16 @@ io.on("connection", socket => {
     const targetSocket = mapper.get(target)?.socket;
     if (targetSocket) {
       targetSocket.emit(SERVER_EVENT.FORWARD_ANSWER, { origin, answer, target });
+    }
+  });
+
+  socket.on(CLINT_EVENT.SEND_MESSAGE, ({ origin, message, target }) => {
+    // 验证
+    if (authenticate.get(socket) !== origin) return void 0;
+    // Fallback Relay message forwarding
+    const targetSocket = mapper.get(target)?.socket;
+    if (targetSocket) {
+      targetSocket.emit(SERVER_EVENT.FORWARD_MESSAGE, { origin, message, target });
     }
   });
 

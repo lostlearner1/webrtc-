@@ -3,7 +3,7 @@
   box-sizing: border-box;
   max-height: 100%;
   max-width: 96%;
-  width: 650px;
+  width: 680px;
 
   :global {
     .arco-modal-content {
@@ -21,14 +21,15 @@
     .titleLeft {
       align-items: center;
       display: flex;
+      font-weight: 600;
     }
 
     .dot {
       border-radius: 5px;
-      height: 7px;
-      margin-right: 7px;
+      height: 8px;
+      margin-right: 8px;
       margin-top: 1px;
-      width: 7px;
+      width: 8px;
     }
 
     .batchActions {
@@ -58,7 +59,7 @@
     box-sizing: border-box;
     height: 480px;
     overflow-y: auto;
-    padding: 5px 12px;
+    padding: 8px 14px;
     scrollbar-width: thin;
 
     &::-webkit-scrollbar {
@@ -73,42 +74,45 @@
 
     .messageItem {
       display: flex;
+      margin-bottom: 14px;
 
       &.alignRight {
         justify-content: flex-end;
 
         .messageContent {
-          background-color: rgba(var(--arcoblue-6), 0.85);
+          background: linear-gradient(135deg, #165dff 0%, #0e42d2 100%);
+          box-shadow: 0 4px 12px rgba(22, 93, 255, 0.2);
         }
       }
     }
 
     .messageContent {
-      background-color: rgba(var(--green-7), 0.85);
-      border-radius: 10px;
+      background: linear-gradient(135deg, #00b42a 0%, #008f1f 100%);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 180, 42, 0.18);
       box-sizing: border-box;
       color: #fff;
-      margin-top: 16px;
-      max-width: 85%;
+      max-width: 88%;
       padding: 10px 14px;
     }
 
     .fileMessage {
       max-width: 100%;
-      min-width: 200px;
-      padding: 0 2px;
+      min-width: 260px;
+      padding: 2px;
 
-      .fileInfo {
-        align-items: center;
+      .fileHeader {
+        align-items: flex-start;
         display: flex;
-        font-size: 12px;
         justify-content: space-between;
         margin-bottom: 6px;
       }
 
       .fileName {
+        align-items: center;
+        display: flex;
         font-size: 13px;
-        font-weight: 500;
+        font-weight: 600;
         margin-bottom: 2px;
         overflow-wrap: break-word;
         white-space: pre-wrap;
@@ -116,37 +120,95 @@
       }
 
       .fileIcon {
-        margin-right: 4px;
+        flex-shrink: 0;
+        font-size: 15px;
+        margin-right: 6px;
       }
 
-      .fileDownload {
+      .fileSubDetails {
         align-items: center;
-        background: rgba(255, 255, 255, 0.15);
-        border: 1px solid rgba(255, 255, 255, 0.8);
-        border-radius: 20px;
+        color: rgba(255, 255, 255, 0.85);
+        display: flex;
+        flex-wrap: wrap;
+        font-size: 11px;
+        gap: 8px;
+        margin-top: 2px;
+      }
+
+      .telemetryBadge {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        font-family: monospace;
+        font-weight: 500;
+        padding: 1px 5px;
+      }
+
+      .fileActions {
+        align-items: center;
+        display: flex;
+        flex-shrink: 0;
+        gap: 6px;
+        margin-left: 12px;
+      }
+
+      .actionButton {
+        align-items: center;
+        background: rgba(255, 255, 255, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 16px;
         color: #fff;
         cursor: pointer;
         display: flex;
-        flex-shrink: 0;
-        font-size: 14px;
+        font-size: 13px;
         height: 28px;
         justify-content: center;
-        margin-left: 16px;
         transition: all 0.2s ease;
         width: 28px;
 
         &:hover {
-          background: rgba(255, 255, 255, 0.3);
-          transform: scale(1.05);
+          background: rgba(255, 255, 255, 0.35);
+          transform: scale(1.08);
         }
 
         &.disable {
           cursor: not-allowed;
-          opacity: 0.5;
+          opacity: 0.45;
 
           &:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.18);
             transform: none;
+          }
+        }
+      }
+
+      .progressBarWrapper {
+        margin: 8px 0 4px 0;
+      }
+
+      .hashIntegrityRow {
+        align-items: center;
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 4px;
+        display: flex;
+        font-size: 10px;
+        justify-content: space-between;
+        margin-top: 6px;
+        padding: 3px 6px;
+
+        .hashLabel {
+          align-items: center;
+          display: flex;
+          gap: 4px;
+          opacity: 0.9;
+        }
+
+        .hashText {
+          cursor: pointer;
+          font-family: monospace;
+          opacity: 0.85;
+
+          &:hover {
+            text-decoration: underline;
           }
         }
       }
@@ -154,7 +216,8 @@
       :global {
         .arco-progress-line-text {
           color: #fff;
-          font-size: 12px;
+          font-size: 11px;
+          font-weight: 600;
         }
       }
     }

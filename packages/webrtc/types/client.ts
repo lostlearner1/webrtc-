@@ -15,8 +15,14 @@ export const DEVICE_TYPE = {
 export const MESSAGE_TYPE = {
   TEXT: "TEXT",
   FILE_START: "FILE_START",
+  FILE_READY: "FILE_READY",
   FILE_NEXT: "FILE_NEXT",
+  FILE_PAUSE: "FILE_PAUSE",
+  FILE_RESUME: "FILE_RESUME",
+  FILE_CANCEL: "FILE_CANCEL",
+  FILE_PROGRESS: "FILE_PROGRESS",
   FILE_FINISH: "FILE_FINISH",
+  FILE_VERIFIED: "FILE_VERIFIED",
 } as const;
 
 export const TRANSFER_TYPE = {
@@ -29,11 +35,28 @@ export const TRANSFER_FROM = {
   PEER: "PEER",
 } as const;
 
+export const FILE_STATUS = {
+  PENDING: "PENDING",
+  TRANSFERRING: "TRANSFERRING",
+  PAUSED: "PAUSED",
+  VERIFYING: "VERIFYING",
+  COMPLETED: "COMPLETED",
+  ERROR: "ERROR",
+} as const;
+
+export type FileStatus = Object.Values<typeof FILE_STATUS>;
+
 export type MessageTypeMap = {
   [MESSAGE_TYPE.TEXT]: { data: string };
-  [MESSAGE_TYPE.FILE_START]: { name: string } & FileMeta;
+  [MESSAGE_TYPE.FILE_START]: { name: string; sha256?: string; chunkSize?: number } & FileMeta;
+  [MESSAGE_TYPE.FILE_READY]: { id: string; startSeries?: number };
   [MESSAGE_TYPE.FILE_NEXT]: { series: number } & FileMeta;
-  [MESSAGE_TYPE.FILE_FINISH]: { id: string };
+  [MESSAGE_TYPE.FILE_PAUSE]: { id: string };
+  [MESSAGE_TYPE.FILE_RESUME]: { id: string; series: number };
+  [MESSAGE_TYPE.FILE_CANCEL]: { id: string };
+  [MESSAGE_TYPE.FILE_PROGRESS]: { id: string; series: number; progress: number };
+  [MESSAGE_TYPE.FILE_FINISH]: { id: string; sha256?: string };
+  [MESSAGE_TYPE.FILE_VERIFIED]: { id: string; verified: boolean; sha256: string };
 };
 
 export type TransferTypeMap = {
@@ -47,6 +70,11 @@ export type TransferTypeMap = {
     progress: number;
     from: Object.Values<typeof TRANSFER_FROM>;
     targetId?: string;
+    status?: FileStatus;
+    speed?: number; // bytes per second
+    eta?: number; // seconds remaining
+    sha256?: string;
+    verified?: boolean;
   };
 };
 

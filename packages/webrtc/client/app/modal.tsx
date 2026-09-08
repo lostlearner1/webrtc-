@@ -2,25 +2,45 @@ import type { WebRTCApi } from "../../types/webrtc";
 import styles from "../styles/modal.module.scss";
 import type { FC } from "react";
 import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import type { BufferType, ConnectionState, MessageType, TransferType } from "../../types/client";
-import { CONNECTION_STATE, MESSAGE_TYPE, TRANSFER_FROM, TRANSFER_TYPE } from "../../types/client";
+import type { BufferType, ConnectionState, FileStatus, MessageType, TransferType } from "../../types/client";
+import {
+  CONNECTION_STATE,
+  FILE_STATUS,
+  MESSAGE_TYPE,
+  TRANSFER_FROM,
+  TRANSFER_TYPE,
+} from "../../types/client";
 import { Button, Input, Modal, Progress, Tooltip, Message as ArcoMessage } from "@arco-design/web-react";
-import { IconDownload, IconFile, IconFolder, IconRight, IconSend, IconToBottom } from "@arco-design/web-react/icon";
+import {
+  IconCheckCircleFill,
+  IconCopy,
+  IconDownload,
+  IconFile,
+  IconFolder,
+  IconPause,
+  IconPlayArrow,
+  IconRight,
+  IconSend,
+  IconToBottom,
+} from "@arco-design/web-react/icon";
 import type { WebRTC } from "../bridge/webrtc";
 import { useMemoFn } from "laser-utils";
 import { cs, getUniqueId, isString } from "laser-utils";
 import { TSON } from "../utils/tson";
-import { formatBytes, scrollToBottom } from "../utils/format";
+import { formatBytes, formatEta, formatSpeed, scrollToBottom } from "../utils/format";
 import {
-  FILE_MAPPER,
+  ACTIVE_RECEIVER_TRACKERS,
+  ACTIVE_SENDER_SESSIONS,
   FILE_HANDLE,
+  FILE_MAPPER,
   FILE_STATE,
   ID_SIZE,
   STEAM_TYPE,
+  StreamSenderSession,
+  calculateFileHash,
   deserializeChunk,
   getMaxMessageSize,
-  serializeNextChunk,
-  sendChunkMessage,
+  getReceiverTracker,
 } from "../utils/binary";
 import { WorkerEvent } from "../worker/event";
 
@@ -64,79 +84,250 @@ export const TransferModal: FC<{
     rtc.current?.send(TSON.encode(message), targetId);
   };
 
-  const updateFileProgress = (id: string, progress: number) => {
+  const updateFileItem = (
+    id: string,
+    updates: Partial<{
+      progress: number;
+      status: FileStatus;
+      speed: number;
+      eta: number;
+      sha256: string;
+      verified: boolean;
+    }>
+  ) => {
     setList(prev =>
       prev.map(item => {
         if (item.key === TRANSFER_TYPE.FILE && item.id === id) {
-          return { ...item, progress };
+          return { ...item, ...updates };
         }
         return item;
       })
     );
   };
 
+  const onPauseTransfer = (id: string, targetId?: string) => {
+    const session = ACTIVE_SENDER_SESSIONS.get(id);
+    if (session) {
+      session.pause();
+      sendTextMessage({ key: MESSAGE_TYPE.FILE_PAUSE, id }, targetId || session.targetId);
+      updateFileItem(id, { status: FILE_STATUS.PAUSED, speed: 0, eta: 0 });
+    } else {
+      // Receiver initiated pause
+      sendTextMessage({ key: MESSAGE_TYPE.FILE_PAUSE, id }, targetId);
+      updateFileItem(id, { status: FILE_STATUS.PAUSED, speed: 0, eta: 0 });
+    }
+  };
+
+  const onResumeTransfer = (id: string, targetId?: string) => {
+    const session = ACTIVE_SENDER_SESSIONS.get(id);
+    if (session) {
+      session.resume();
+      sendTextMessage(
+        { key: MESSAGE_TYPE.FILE_RESUME, id, series: session.currentSeries },
+        targetId || session.targetId
+      );
+      updateFileItem(id, { status: FILE_STATUS.TRANSFERRING });
+      session.startStreaming(rtc);
+    } else {
+      // Receiver requested resume
+      const tracker = ACTIVE_RECEIVER_TRACKERS.get(id);
+      const mapper = FILE_MAPPER.get(id) || [];
+      const currentCount = mapper.filter(Boolean).length;
+      sendTextMessage({ key: MESSAGE_TYPE.FILE_RESUME, id, series: currentCount }, targetId);
+      updateFileItem(id, { status: FILE_STATUS.TRANSFERRING });
+    }
+  };
+
+  const copyHash = (hash: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(hash);
+      ArcoMessage.success("SHA-256 hash copied to clipboard");
+    }
+  };
+
   const onMessage = useMemoFn(async (event: MessageEvent<string | BufferType>, targetId: string) => {
     if (isString(event.data)) {
-      // String - 接收文本类型数据
+      // String - Signaling / Control messages
       const data = TSON.decode(event.data);
       if (!data) return void 0;
+
       if (data.key === MESSAGE_TYPE.TEXT) {
-        // 收到 发送方 的文本消息
         setList(prev => [...prev, { from: TRANSFER_FROM.PEER, targetId, ...data }]);
         scrollToBottom(listRef);
       } else if (data.key === MESSAGE_TYPE.FILE_START) {
-        // 收到 发送方 传输起始消息 准备接收数据
-        const { id, name, size, total } = data;
-        FILE_STATE.set(id, { series: 0, ...data });
+        // Sender initiated a file transfer
+        const { id, name, size, total, sha256 } = data;
+        FILE_STATE.set(id, { series: 0, id, size, total, sha256, status: FILE_STATUS.TRANSFERRING });
+        FILE_MAPPER.set(id, []);
+        getReceiverTracker(id, name, size, total, sha256);
+
         setList(prev => [
           ...prev,
-          { key: TRANSFER_TYPE.FILE, from: TRANSFER_FROM.PEER, targetId, name, size, progress: 0, id },
+          {
+            key: TRANSFER_TYPE.FILE,
+            from: TRANSFER_FROM.PEER,
+            targetId,
+            name,
+            size,
+            progress: 0,
+            id,
+            status: FILE_STATUS.TRANSFERRING,
+            sha256,
+            verified: false,
+          },
         ]);
-        // 通知 发送方 发送首个块
-        sendTextMessage({ key: MESSAGE_TYPE.FILE_NEXT, id, series: 0, size, total }, targetId);
+
+        // Signal sender that receiver is ready to ingest the high-speed stream
+        sendTextMessage({ key: MESSAGE_TYPE.FILE_READY, id, startSeries: 0 }, targetId);
         stream && WorkerEvent.start(id, name, size, total);
         scrollToBottom(listRef);
-      } else if (data.key === MESSAGE_TYPE.FILE_NEXT) {
-        // 收到 接收方 的准备接收块数据消息
-        const { id, series, total } = data;
-        const progress = Math.floor((series / total) * 100);
-        updateFileProgress(id, progress);
-        const nextChunk = serializeNextChunk(rtc, id, series);
-        // 向目标 接收方 发送块数据
-        sendChunkMessage(rtc, nextChunk, targetId);
-      } else if (data.key === MESSAGE_TYPE.FILE_FINISH) {
-        // 收到 接收方 的接收完成消息
+      } else if (data.key === MESSAGE_TYPE.FILE_READY) {
+        // Receiver is ready to ingest stream
+        const { id, startSeries = 0 } = data;
+        const session = ACTIVE_SENDER_SESSIONS.get(id);
+        if (session) {
+          session.resume(startSeries);
+          session.startStreaming(rtc);
+        }
+      } else if (data.key === MESSAGE_TYPE.FILE_PAUSE) {
         const { id } = data;
-        FILE_STATE.delete(id);
-        updateFileProgress(id, 100);
+        const session = ACTIVE_SENDER_SESSIONS.get(id);
+        if (session) {
+          session.pause();
+        }
+        updateFileItem(id, { status: FILE_STATUS.PAUSED, speed: 0, eta: 0 });
+      } else if (data.key === MESSAGE_TYPE.FILE_RESUME) {
+        const { id, series } = data;
+        const session = ACTIVE_SENDER_SESSIONS.get(id);
+        if (session) {
+          session.resume(series);
+          session.startStreaming(rtc);
+        }
+        updateFileItem(id, { status: FILE_STATUS.TRANSFERRING });
+      } else if (data.key === MESSAGE_TYPE.FILE_NEXT) {
+        // Backward-compatibility: single chunk request
+        const { id, series } = data;
+        const session = ACTIVE_SENDER_SESSIONS.get(id);
+        if (session && !session.isStreaming) {
+          session.resume(series);
+          session.startStreaming(rtc);
+        }
+      } else if (data.key === MESSAGE_TYPE.FILE_FINISH) {
+        // Sender finished sending all chunks
+        const { id, sha256 } = data;
+        const fileState = FILE_STATE.get(id);
+        if (fileState) {
+          fileState.sha256 = sha256 || fileState.sha256;
+        }
+      } else if (data.key === MESSAGE_TYPE.FILE_VERIFIED) {
+        // Receiver notified sender of cryptographic verification match
+        const { id, verified, sha256 } = data;
+        updateFileItem(id, {
+          status: FILE_STATUS.COMPLETED,
+          progress: 100,
+          verified,
+          sha256,
+          speed: 0,
+          eta: 0,
+        });
       }
       return void 0;
     }
+
     if (event.data instanceof ArrayBuffer || event.data instanceof Blob) {
-      // Binary - 接收 发送方 ArrayBuffer 数据
+      // Binary - High-speed chunk arrival
       const blob = event.data;
       const { id, series, data } = await deserializeChunk(blob);
       const fileState = FILE_STATE.get(id);
+      const tracker = ACTIVE_RECEIVER_TRACKERS.get(id);
       if (!fileState) return void 0;
+
       const { size, total } = fileState;
-      const progress = Math.floor((series / total) * 100);
-      updateFileProgress(id, progress);
-      if (series >= total) {
-        // 数据接收完毕 通知 发送方 接收完毕
-        sendTextMessage({ key: MESSAGE_TYPE.FILE_FINISH, id }, targetId);
-        stream && WorkerEvent.close(id);
+
+      if (stream) {
+        await WorkerEvent.post(id, data);
       } else {
-        // 数据块序列号 [0, TOTAL)
-        if (stream) {
-          await WorkerEvent.post(id, data);
-        } else {
-          // 在内存中存储块数据
-          const mapper = FILE_MAPPER.get(id) || [];
-          mapper[series] = data;
-          FILE_MAPPER.set(id, mapper);
+        const mapper = FILE_MAPPER.get(id) || [];
+        mapper[series] = data;
+        FILE_MAPPER.set(id, mapper);
+      }
+
+      if (tracker) {
+        tracker.receivedCount++;
+        tracker.bytesReceived += data.byteLength;
+
+        // Sample speed every 300ms
+        const now = Date.now();
+        const elapsed = now - tracker.lastSampleTime;
+        if (elapsed >= 300 || tracker.receivedCount >= total) {
+          const deltaBytes = tracker.bytesReceived - tracker.lastSampleBytes;
+          const currentSpeed = deltaBytes / (elapsed / 1000) || 0;
+          const remainingBytes = Math.max(0, size - tracker.bytesReceived);
+          const eta = currentSpeed > 0 ? Math.ceil(remainingBytes / currentSpeed) : 0;
+
+          tracker.lastSampleTime = now;
+          tracker.lastSampleBytes = tracker.bytesReceived;
+          tracker.currentSpeed = currentSpeed;
+          tracker.eta = eta;
+
+          const progress = Math.min(100, Math.floor((tracker.receivedCount / total) * 100));
+          updateFileItem(id, {
+            progress,
+            speed: currentSpeed,
+            eta,
+            status: tracker.receivedCount >= total ? FILE_STATUS.VERIFYING : FILE_STATUS.TRANSFERRING,
+          });
         }
-        // 通知 发送方 发送下一个序列块
-        sendTextMessage({ key: MESSAGE_TYPE.FILE_NEXT, id, series: series + 1, size, total }, targetId);
+      }
+
+      // Check if all chunks received
+      const mapper = FILE_MAPPER.get(id) || [];
+      const isComplete = stream ? series + 1 >= total : mapper.filter(Boolean).length >= total;
+
+      if (isComplete) {
+        updateFileItem(id, {
+          progress: 100,
+          status: FILE_STATUS.VERIFYING,
+          speed: 0,
+          eta: 0,
+        });
+
+        if (stream) {
+          WorkerEvent.close(id);
+        }
+
+        // Asynchronously compute and verify cryptographic SHA-256 hash
+        setTimeout(async () => {
+          try {
+            const assembledBlob = new Blob(mapper, { type: STEAM_TYPE });
+            const computedHash = await calculateFileHash(assembledBlob);
+            const expectedHash = fileState.sha256 || tracker?.sha256Expected;
+            const isVerified = Boolean(!expectedHash || computedHash === expectedHash);
+
+            updateFileItem(id, {
+              status: FILE_STATUS.COMPLETED,
+              progress: 100,
+              verified: isVerified,
+              sha256: computedHash,
+              speed: 0,
+              eta: 0,
+            });
+
+            // Inform sender that the file was verified
+            sendTextMessage(
+              {
+                key: MESSAGE_TYPE.FILE_VERIFIED,
+                id,
+                verified: isVerified,
+                sha256: computedHash,
+              },
+              targetId
+            );
+          } catch (err) {
+            console.error("Verification error", err);
+            updateFileItem(id, { status: FILE_STATUS.COMPLETED, progress: 100 });
+          }
+        }, 50);
       }
       return void 0;
     }
@@ -195,8 +386,52 @@ export const TransferModal: FC<{
       const id = getUniqueId(ID_SIZE);
       const size = file.size;
       const total = Math.ceil(file.size / maxChunkSize);
-      sendTextMessage({ key: MESSAGE_TYPE.FILE_START, id, name, size, total }); // Broadcast
+
       FILE_HANDLE.set(id, file);
+
+      // Create streaming sender session with backpressure and progress tracking
+      const session = new StreamSenderSession(
+        id,
+        file,
+        maxChunkSize,
+        peerIds[0], // Target peer
+        update => {
+          updateFileItem(update.id, {
+            progress: update.progress,
+            status: update.status,
+            speed: update.speed,
+            eta: update.eta,
+          });
+        },
+        async finishedId => {
+          const hash = await calculateFileHash(file);
+          sendTextMessage({ key: MESSAGE_TYPE.FILE_FINISH, id: finishedId, sha256: hash });
+          updateFileItem(finishedId, {
+            progress: 100,
+            status: FILE_STATUS.COMPLETED,
+            sha256: hash,
+            speed: 0,
+            eta: 0,
+          });
+        }
+      );
+
+      ACTIVE_SENDER_SESSIONS.set(id, session);
+
+      // Compute SHA-256 hash asynchronously
+      calculateFileHash(file).then(sha256 => {
+        sendTextMessage({
+          key: MESSAGE_TYPE.FILE_START,
+          id,
+          name,
+          size,
+          total,
+          sha256,
+          chunkSize: maxChunkSize,
+        });
+        updateFileItem(id, { sha256 });
+      });
+
       newItems.push({
         key: TRANSFER_TYPE.FILE,
         from: TRANSFER_FROM.SELF,
@@ -204,7 +439,13 @@ export const TransferModal: FC<{
         size,
         progress: 0,
         id,
+        status: FILE_STATUS.TRANSFERRING,
       } as const);
+
+      // Trigger pipelined backpressure streaming
+      setTimeout(() => {
+        session.startStreaming(rtc);
+      }, 50);
     }
 
     setList(prev => [...prev, ...newItems]);
@@ -256,9 +497,11 @@ export const TransferModal: FC<{
   };
 
   const onDownloadFile = (id: string, fileName: string) => {
-    const blob = FILE_MAPPER.get(id)
-      ? new Blob(FILE_MAPPER.get(id), { type: STEAM_TYPE })
-      : FILE_HANDLE.get(id) || new Blob();
+    const mapper = FILE_MAPPER.get(id);
+    const blob =
+      mapper && mapper.length
+        ? new Blob(mapper, { type: STEAM_TYPE })
+        : FILE_HANDLE.get(id) || new Blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -267,7 +510,6 @@ export const TransferModal: FC<{
     URL.revokeObjectURL(url);
   };
 
-  // Download all completed received files
   const completedReceivedFiles = useMemo(() => {
     return list.filter(
       item =>
@@ -307,7 +549,6 @@ export const TransferModal: FC<{
 
   const enableTransfer = state === CONNECTION_STATE.CONNECTED;
 
-  // Batch transfer stats
   const totalFiles = list.filter(item => item.key === TRANSFER_TYPE.FILE).length;
   const inProgressFiles = list.filter(
     item => item.key === TRANSFER_TYPE.FILE && item.progress < 100
@@ -383,30 +624,98 @@ export const TransferModal: FC<{
           >
             <div className={styles.messageContent}>
               {item.from === TRANSFER_FROM.PEER && item.targetId && (
-                <div style={{ fontSize: '10px', color: '#999', marginBottom: '2px' }}>{item.targetId}</div>
+                <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.75)", marginBottom: "3px" }}>
+                  {item.targetId}
+                </div>
               )}
               {item.key === TRANSFER_TYPE.TEXT ? (
                 <span>{item.data}</span>
               ) : (
                 <div className={styles.fileMessage}>
-                  <div className={styles.fileInfo}>
-                    <div>
+                  <div className={styles.fileHeader}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div className={styles.fileName}>
                         <IconFile className={styles.fileIcon} />
-                        {item.name}
+                        <span>{item.name}</span>
                       </div>
-                      <div>{formatBytes(item.size)}</div>
+                      <div className={styles.fileSubDetails}>
+                        <span>{formatBytes(item.size)}</span>
+                        {item.status === FILE_STATUS.TRANSFERRING && (
+                          <Fragment>
+                            {Boolean(item.speed) && (
+                              <span className={styles.telemetryBadge}>
+                                {formatSpeed(item.speed || 0)}
+                              </span>
+                            )}
+                            {Boolean(item.eta) && (
+                              <span className={styles.telemetryBadge}>{formatEta(item.eta || 0)}</span>
+                            )}
+                          </Fragment>
+                        )}
+                        {item.status === FILE_STATUS.PAUSED && (
+                          <span className={styles.telemetryBadge} style={{ background: "rgba(255, 125, 0, 0.4)" }}>
+                            Paused
+                          </span>
+                        )}
+                        {item.status === FILE_STATUS.VERIFYING && (
+                          <span className={styles.telemetryBadge} style={{ background: "rgba(22, 93, 255, 0.4)" }}>
+                            Verifying Checksum...
+                          </span>
+                        )}
+                        {item.status === FILE_STATUS.COMPLETED && (
+                          <span className={styles.telemetryBadge} style={{ background: "rgba(0, 180, 42, 0.4)" }}>
+                            Completed
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {!stream && (
-                      <div
-                        className={cs(styles.fileDownload, item.progress !== 100 && styles.disable)}
-                        onClick={() => item.progress === 100 && onDownloadFile(item.id, item.name)}
-                      >
-                        <IconToBottom />
-                      </div>
-                    )}
+
+                    <div className={styles.fileActions}>
+                      {item.progress < 100 && (
+                        <Tooltip content={item.status === FILE_STATUS.PAUSED ? "Resume Transfer" : "Pause Transfer"}>
+                          <div
+                            className={styles.actionButton}
+                            onClick={() =>
+                              item.status === FILE_STATUS.PAUSED
+                                ? onResumeTransfer(item.id, item.targetId)
+                                : onPauseTransfer(item.id, item.targetId)
+                            }
+                          >
+                            {item.status === FILE_STATUS.PAUSED ? <IconPlayArrow /> : <IconPause />}
+                          </div>
+                        </Tooltip>
+                      )}
+                      {!stream && (
+                        <Tooltip content="Download File">
+                          <div
+                            className={cs(styles.actionButton, item.progress !== 100 && styles.disable)}
+                            onClick={() => item.progress === 100 && onDownloadFile(item.id, item.name)}
+                          >
+                            <IconToBottom />
+                          </div>
+                        </Tooltip>
+                      )}
+                    </div>
                   </div>
-                  <Progress color="#fff" trailColor="#aaa" percent={item.progress}></Progress>
+
+                  <div className={styles.progressBarWrapper}>
+                    <Progress color="#fff" trailColor="rgba(255,255,255,0.3)" percent={item.progress}></Progress>
+                  </div>
+
+                  {Boolean(item.sha256) && (
+                    <div className={styles.hashIntegrityRow}>
+                      <div className={styles.hashLabel}>
+                        <IconCheckCircleFill style={{ color: "#00e676", fontSize: 12 }} />
+                        <span>SHA-256:</span>
+                      </div>
+                      <Tooltip content="Click to copy full SHA-256 checksum">
+                        <div className={styles.hashText} onClick={() => copyHash(item.sha256 || "")}>
+                          <span>{item.sha256?.slice(0, 10)}...{item.sha256?.slice(-6)}</span>
+                          <IconCopy style={{ marginLeft: 4, fontSize: 10 }} />
+                        </div>
+                      </Tooltip>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

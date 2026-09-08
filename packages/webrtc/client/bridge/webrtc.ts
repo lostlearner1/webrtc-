@@ -2,6 +2,7 @@ import type { WebRTCCallback, WebRTCOptions } from "../../types/webrtc";
 import { WebRTCInstance } from "./instance";
 import { SignalingServer } from "./signaling";
 import { getUniqueId } from "laser-utils";
+import { CLINT_EVENT, SERVER_EVENT } from "../../types/signaling";
 
 export class WebRTC {
   /** 连接 id */
@@ -36,7 +37,8 @@ export class WebRTC {
     sessionStorage?.setItem(STORAGE_KEY, this.id);
     this.signaling = new SignalingServer(options.wss, this.id);
     this.signaling.socket.on("connect", this.onConnection);
-    this.signaling.on("FORWARD_OFFER", this.onReceiveOffer);
+    this.signaling.on(SERVER_EVENT.FORWARD_OFFER, this.onReceiveOffer);
+    this.signaling.on(SERVER_EVENT.FORWARD_MESSAGE, this.onReceiveRelayMessage);
   }
 
   public createInstance = (targetId: string) => {
@@ -89,17 +91,44 @@ export class WebRTC {
       instance.createRemoteConnection(targetId);
       return instance.ready;
     };
-    const onSendMessage = (message: string | Blob | ArrayBuffer | ArrayBufferView, targetId?: string) => {
+    const onSendMessage = async (
+      message: string | Blob | ArrayBuffer | ArrayBufferView,
+      targetId?: string
+    ) => {
+      const buffer = message instanceof Blob ? await message.arrayBuffer() : message;
       if (targetId) {
         const instance = this.instances.get(targetId);
-        if (instance && instance.connection.connectionState === "connected") {
-          instance.channel.send(message as Blob);
+        if (
+          instance &&
+          !instance.isFallbackConnected &&
+          instance.channel &&
+          instance.channel.readyState === "open"
+        ) {
+          instance.channel.send(buffer as any);
+        } else {
+          // Seamless Local Relay Fallback
+          this.signaling.emit(CLINT_EVENT.SEND_MESSAGE, {
+            origin: this.id,
+            target: targetId,
+            message: buffer as any,
+          });
         }
       } else {
         // Broadcast
-        for (const instance of this.instances.values()) {
-          if (instance.connection.connectionState === "connected") {
-             instance.channel.send(message as Blob);
+        for (const [id, instance] of this.instances.entries()) {
+          if (
+            instance &&
+            !instance.isFallbackConnected &&
+            instance.channel &&
+            instance.channel.readyState === "open"
+          ) {
+            instance.channel.send(buffer as any);
+          } else {
+            this.signaling.emit(CLINT_EVENT.SEND_MESSAGE, {
+              origin: this.id,
+              target: id,
+              message: buffer as any,
+            });
           }
         }
       }
@@ -136,9 +165,15 @@ export class WebRTC {
     }
   };
 
+  private onReceiveRelayMessage = (params: any) => {
+    const { message, origin } = params;
+    this.onMessage(new MessageEvent("message", { data: message }), origin);
+  };
+
   public destroy = () => {
     this.signaling.socket.off("connect", this.onConnection);
-    this.signaling.off("FORWARD_OFFER", this.onReceiveOffer);
+    this.signaling.off(SERVER_EVENT.FORWARD_OFFER, this.onReceiveOffer);
+    this.signaling.off(SERVER_EVENT.FORWARD_MESSAGE, this.onReceiveRelayMessage);
     this.signaling.destroy();
     for (const instance of this.instances.values()) {
       instance.destroy();
