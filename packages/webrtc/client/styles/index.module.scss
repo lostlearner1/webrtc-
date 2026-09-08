@@ -1,150 +1,528 @@
-// === Page ===
+// === Landing Page & Discovery Styles ===
+
 body,
 html {
-  color: var(--color-text-1);
+  color: var(--color-text-1, #1d2129);
   height: 100%;
+  margin: 0;
+  overflow: hidden;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-// === Main ===
-body,
 .container {
+  box-sizing: border-box;
   display: flex;
-  height: 100%;
-  justify-content: center;
+  flex-direction: column;
+  height: 100vh;
+  justify-content: space-between;
   margin: 0;
   padding: 0;
-  width: 100%;
+  position: relative;
+  width: 100vw;
+  user-select: none;
+}
 
-  .content {
+// === Top Navbar ===
+.navbar {
+  align-items: center;
+  backdrop-filter: blur(16px);
+  background: rgba(var(--color-bg-2-rgb, 255, 255, 255), 0.7);
+  border-bottom: 1px solid rgba(var(--color-border-2-rgb, 229, 230, 235), 0.6);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  display: flex;
+  height: 60px;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+
+  .navBrand {
     align-items: center;
-    bottom: 30px;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    left: 50%;
-    max-width: 100%;
-    position: fixed;
-    transform: translateX(-50%);
+    gap: 10px;
+
+    .brandIcon {
+      align-items: center;
+      background: linear-gradient(135deg, #165DFF 0%, #722ED1 100%);
+      border-radius: 10px;
+      box-shadow: 0 3px 10px rgba(22, 93, 255, 0.3);
+      color: #ffffff;
+      display: flex;
+      font-size: 16px;
+      height: 32px;
+      justify-content: center;
+      width: 32px;
+    }
+
+    .brandTitle {
+      background: linear-gradient(135deg, #165DFF 0%, #722ED1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .streamBadge {
+      background: rgba(22, 93, 255, 0.1);
+      border: 1px solid rgba(22, 93, 255, 0.25);
+      border-radius: 6px;
+      color: #165dff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      text-transform: uppercase;
+    }
   }
 
-  .boardCastIcon {
-    color: rgba(var(--arcoblue-6), 0.8);
-    font-size: 60px;
-    text-align: center;
+  .navStatus {
+    align-items: center;
+    background: rgba(0, 180, 42, 0.08);
+    border: 1px solid rgba(0, 180, 42, 0.2);
+    border-radius: 20px;
+    color: #00b42a;
+    display: flex;
+    font-size: 12px;
+    font-weight: 600;
+    gap: 7px;
+    padding: 4px 12px;
+
+    .beaconDot {
+      background: #00e676;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #00e676;
+      height: 8px;
+      width: 8px;
+      animation: pulseBeacon 2s infinite;
+    }
   }
 
-  .actionGroup {
+  .navActions {
     align-items: center;
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
-    margin-top: 10px;
+    gap: 10px;
 
-    .actionButton {
-      background: var(--color-fill-2);
-      border: 1px solid var(--color-border-2);
-      border-radius: 20px;
-      color: var(--color-text-1);
-      cursor: pointer;
-      display: inline-flex;
-      font-size: 13px;
-      padding: 5px 14px;
+    .navBtn {
+      border-radius: 12px;
+      font-weight: 600;
       transition: all 0.2s ease;
-      user-select: none;
 
       &:hover {
-        background: rgba(var(--arcoblue-6), 0.12);
-        border-color: rgba(var(--arcoblue-6), 0.5);
-        color: rgb(var(--arcoblue-6));
+        transform: translateY(-1px);
+      }
+    }
+  }
+}
+
+// === Main Discovery Center ===
+.centerStage {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  margin-top: 40px;
+  margin-bottom: 120px;
+  padding: 20px;
+  position: relative;
+  z-index: 10;
+}
+
+// === Scanning Hero Card ===
+.scanningCard {
+  align-items: center;
+  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(22, 93, 255, 0.15);
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  padding: 32px 28px;
+  text-align: center;
+  transition: all 0.3s ease;
+  animation: heroFloat 4s ease-in-out infinite;
+
+  .radarBeaconBox {
+    align-items: center;
+    display: flex;
+    height: 80px;
+    justify-content: center;
+    margin-bottom: 16px;
+    position: relative;
+    width: 80px;
+
+    .radarWave {
+      border: 2px solid rgba(22, 93, 255, 0.3);
+      border-radius: 50%;
+      height: 100%;
+      position: absolute;
+      width: 100%;
+      animation: pulseRadar 2s infinite ease-out;
+    }
+
+    .radarWaveDelay {
+      animation-delay: 1s;
+    }
+
+    .antennaIcon {
+      align-items: center;
+      background: linear-gradient(135deg, #165DFF 0%, #722ED1 100%);
+      border-radius: 50%;
+      box-shadow: 0 8px 24px rgba(22, 93, 255, 0.35);
+      color: #ffffff;
+      display: flex;
+      font-size: 32px;
+      height: 56px;
+      justify-content: center;
+      position: relative;
+      width: 56px;
+      z-index: 2;
+    }
+  }
+
+  .scanningTitle {
+    color: var(--color-text-1, #1d2129);
+    font-size: 19px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .scanningSubtitle {
+    color: var(--color-text-3, #86909c);
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    max-width: 380px;
+  }
+
+  .scanningPills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+
+    .actionPill {
+      align-items: center;
+      background: var(--color-fill-2, #f2f3f5);
+      border: 1px solid var(--color-border-2, #e5e6eb);
+      border-radius: 20px;
+      color: var(--color-text-1, #1d2129);
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 12px;
+      font-weight: 600;
+      gap: 6px;
+      padding: 6px 14px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: rgba(22, 93, 255, 0.12);
+        border-color: rgba(22, 93, 255, 0.4);
+        color: #165dff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(22, 93, 255, 0.15);
+      }
+    }
+  }
+}
+
+// === Discovered Devices Grid ===
+.discoveredSection {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 800px;
+  animation: fadeIn 0.4s ease-out;
+
+  .discoveredHeader {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+
+    .discoveredTitle {
+      color: var(--color-text-1, #1d2129);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .countBadge {
+      background: linear-gradient(135deg, #00b42a 0%, #009a22 100%);
+      border-radius: 12px;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+    }
+  }
+
+  .deviceGrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    width: 100%;
+
+    .deviceCard {
+      align-items: center;
+      backdrop-filter: blur(16px);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(22, 93, 255, 0.2);
+      border-radius: 20px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
+      box-sizing: border-box;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 24px;
+      position: relative;
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      width: 200px;
+
+      &:hover {
+        border-color: #165dff;
+        box-shadow: 0 16px 32px rgba(22, 93, 255, 0.22);
+        transform: translateY(-6px) scale(1.03);
+
+        .deviceIconBox {
+          background: linear-gradient(135deg, #165DFF 0%, #722ED1 100%);
+          color: #ffffff;
+          box-shadow: 0 8px 20px rgba(22, 93, 255, 0.4);
+        }
+
+        .connectHoverBtn {
+          background: #165dff;
+          color: #ffffff;
+        }
+      }
+
+      .deviceIconBox {
+        align-items: center;
+        background: rgba(22, 93, 255, 0.1);
+        border-radius: 16px;
+        color: #165dff;
+        display: flex;
+        font-size: 32px;
+        height: 64px;
+        justify-content: center;
+        margin-bottom: 12px;
+        transition: all 0.25s ease;
+        width: 64px;
+      }
+
+      .deviceId {
+        color: var(--color-text-1, #1d2129);
+        font-family: monospace;
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .deviceSubnetTag {
+        color: var(--color-text-3, #86909c);
+        font-size: 11px;
+        margin-bottom: 12px;
+      }
+
+      .connectHoverBtn {
+        background: var(--color-fill-2, #f2f3f5);
+        border-radius: 12px;
+        color: var(--color-text-2, #4e5969);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 14px;
+        transition: all 0.2s ease;
+      }
+    }
+  }
+}
+
+// === Bottom Control Dock ===
+.bottomDock {
+  align-items: center;
+  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(229, 230, 235, 0.8);
+  border-radius: 28px;
+  bottom: 24px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+  box-sizing: border-box;
+  display: flex;
+  gap: 16px;
+  left: 50%;
+  padding: 10px 20px;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 40;
+  transition: all 0.3s ease;
+
+  .dockAntenna {
+    align-items: center;
+    background: linear-gradient(135deg, #165DFF 0%, #722ED1 100%);
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(22, 93, 255, 0.35);
+    color: #ffffff;
+    display: flex;
+    font-size: 22px;
+    height: 44px;
+    justify-content: center;
+    width: 44px;
+    flex-shrink: 0;
+  }
+
+  .dockDeviceInfo {
+    display: flex;
+    flex-direction: column;
+    min-width: 140px;
+
+    .dockLabel {
+      color: var(--color-text-3, #86909c);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .dockIdPill {
+      align-items: center;
+      cursor: pointer;
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 2px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        .dockIdText {
+          color: #165dff;
+        }
+
+        .dockCopyIcon {
+          color: #165dff;
+          opacity: 1;
+        }
+      }
+
+      .dockIdText {
+        color: var(--color-text-1, #1d2129);
+        font-family: monospace;
+        font-size: 14px;
+        font-weight: 700;
+        transition: color 0.2s ease;
+      }
+
+      .dockCopyIcon {
+        font-size: 12px;
+        opacity: 0.5;
+        transition: all 0.2s ease;
       }
     }
   }
 
-  .manualEntry {
-    color: rgba(var(--arcoblue-6), 0.8);
-    cursor: pointer;
-    margin-top: 8px;
-    text-align: center;
-    white-space: nowrap;
-  }
-}
-
-.prompt {
-  animation-duration: 0.5s;
-  animation-fill-mode: forwards;
-  animation-name: scale-in;
-  color: rgba(var(--arcoblue-6), 0.8);
-  font-size: 20px;
-  left: 0;
-  position: fixed;
-  right: 0;
-  text-align: center;
-  top: 40%;
-  user-select: none;
-  width: 100%;
-}
-
-// === Banner ===
-.github {
-  color: var(--color-text-1);
-  font-size: 23px;
-  position: fixed;
-  right: 12px;
-  top: 6px;
-}
-
-@keyframes scale-in {
-  0% {
-    opacity: 0;
-    transform: scale(0);
-  }
-
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-// === Device ===
-.deviceGroup {
-  display: flex;
-  font-size: 14px;
-  justify-content: center;
-  left: 0;
-  position: fixed;
-  right: 0;
-  top: 40%;
-  user-select: none;
-  width: 100%;
-
-  .device {
+  .dockActions {
     align-items: center;
-    animation-duration: 0.5s;
-    animation-fill-mode: forwards;
-    animation-name: scale-in;
-    cursor: pointer;
     display: flex;
-    flex-direction: column;
-    /* stylelint-disable-next-line declaration-block-no-redundant-longhand-properties */
-    flex-wrap: wrap;
-    margin: 20px;
+    gap: 8px;
 
-    .icon {
-      align-items: center;
-      background-color: rgba(var(--arcoblue-6), 0.8);
-      border-radius: 70px;
-      color: #fff;
-      display: flex;
-      font-size: 35px;
-      height: 70px;
-      justify-content: center;
-      width: 70px;
+    .dockBtn {
+      border-radius: 14px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
     }
+  }
+}
 
-    .name {
-      color: var(--color-text-1);
-      margin-top: 6px;
+// === Connect ID Modal Inner ===
+.connectModalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 0;
+
+  .modalDesc {
+    color: var(--color-text-3, #86909c);
+    font-size: 13px;
+  }
+
+  .connectInput {
+    border-radius: 12px;
+    font-size: 14px;
+  }
+}
+
+// === Animations ===
+@keyframes pulseBeacon {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.7;
+  }
+}
+
+@keyframes pulseRadar {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes heroFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// === Responsive ===
+@media (max-width: 640px) {
+  .navbar {
+    padding: 0 14px;
+    .navBrand .brandTitle {
+      display: none;
+    }
+  }
+
+  .bottomDock {
+    bottom: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 92%;
+    padding: 10px 14px;
+
+    .dockDeviceInfo {
+      min-width: auto;
     }
   }
 }
