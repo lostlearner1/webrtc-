@@ -13,6 +13,7 @@ import {
 import { Button, Input, Modal, Progress, Tooltip, Message as ArcoMessage } from "@arco-design/web-react";
 import {
   IconCheckCircleFill,
+  IconCloudDownload,
   IconCopy,
   IconDownload,
   IconFile,
@@ -22,12 +23,20 @@ import {
   IconRight,
   IconSend,
   IconToBottom,
+  IconUserGroup,
 } from "@arco-design/web-react/icon";
 import type { WebRTC } from "../bridge/webrtc";
 import { useMemoFn } from "laser-utils";
 import { cs, getUniqueId, isString } from "laser-utils";
 import { TSON } from "../utils/tson";
-import { formatBytes, formatEta, formatSpeed, scrollToBottom } from "../utils/format";
+import {
+  formatBytes,
+  formatEta,
+  formatSpeed,
+  formatTime,
+  getPeerColor,
+  scrollToBottom,
+} from "../utils/format";
 import {
   ACTIVE_RECEIVER_TRACKERS,
   ACTIVE_SENDER_SESSIONS,
@@ -152,7 +161,7 @@ export const TransferModal: FC<{
       if (!data) return void 0;
 
       if (data.key === MESSAGE_TYPE.TEXT) {
-        setList(prev => [...prev, { from: TRANSFER_FROM.PEER, targetId, ...data }]);
+        setList(prev => [...prev, { from: TRANSFER_FROM.PEER, targetId, time: formatTime(), ...data }]);
         scrollToBottom(listRef);
       } else if (data.key === MESSAGE_TYPE.FILE_START) {
         // Sender initiated a file transfer
@@ -174,6 +183,7 @@ export const TransferModal: FC<{
             status: FILE_STATUS.TRANSFERRING,
             sha256,
             verified: false,
+            time: formatTime(),
           },
         ]);
 
@@ -368,7 +378,10 @@ export const TransferModal: FC<{
   const onSendText = () => {
     if (rtc.current && text) {
       sendTextMessage({ key: MESSAGE_TYPE.TEXT, data: text }); // Broadcast
-      setList(prev => [...prev, { key: TRANSFER_TYPE.TEXT, from: TRANSFER_FROM.SELF, data: text }]);
+      setList(prev => [
+        ...prev,
+        { key: TRANSFER_TYPE.TEXT, from: TRANSFER_FROM.SELF, data: text, time: formatTime() },
+      ]);
       setText("");
       scrollToBottom(listRef);
     }
@@ -440,6 +453,7 @@ export const TransferModal: FC<{
         progress: 0,
         id,
         status: FILE_STATUS.TRANSFERRING,
+        time: formatTime(),
       } as const);
 
       // Trigger pipelined backpressure streaming
@@ -560,36 +574,68 @@ export const TransferModal: FC<{
       title={
         <div className={styles.title}>
           <div className={styles.titleLeft}>
-            <div
-              className={styles.dot}
-              style={{
-                backgroundColor:
-                  state === CONNECTION_STATE.READY
-                    ? "rgb(var(--red-6))"
+            <div className={styles.groupAvatar}>
+              <IconUserGroup />
+              <div
+                className={cs(
+                  styles.statusDot,
+                  state === CONNECTION_STATE.CONNECTED && styles.statusConnected,
+                  state === CONNECTION_STATE.CONNECTING && styles.statusConnecting
+                )}
+              />
+            </div>
+            <div className={styles.headerInfo}>
+              <div className={styles.headerTitleRow}>
+                <span className={styles.headerTitle}>Mesh Group Room</span>
+                <span className={cs(styles.statusBadge, styles[state.toLowerCase()])}>
+                  {state === CONNECTION_STATE.READY
+                    ? "Ready"
                     : state === CONNECTION_STATE.CONNECTING
-                    ? "rgb(var(--orange-6))"
+                    ? "Connecting..."
                     : state === CONNECTION_STATE.CONNECTED
-                    ? "rgb(var(--green-6))"
-                    : "rgb(var(--gray-6))",
-              }}
-            ></div>
-            {peerIds.length > 0
-              ? state === CONNECTION_STATE.READY
-                ? "Disconnected"
-                : state === CONNECTION_STATE.CONNECTING
-                ? "Connecting..."
-                : state === CONNECTION_STATE.CONNECTED
-                ? `Group Chat: ${peerIds.join(", ")}`
-                : "Unknown State"
-              : "Please Establish Connection"}
+                    ? `${peerIds.length} Active Peer${peerIds.length > 1 ? "s" : ""}`
+                    : "Disconnected"}
+                </span>
+              </div>
+              <div className={styles.peerListRow}>
+                {peerIds.length > 0 ? (
+                  peerIds.map(peerId => (
+                    <Tooltip key={peerId} content={`Click to copy peer ID: ${peerId}`}>
+                      <div
+                        className={styles.peerPill}
+                        onClick={() => {
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(peerId);
+                            ArcoMessage.success(`Copied peer ID: ${peerId}`);
+                          }
+                        }}
+                      >
+                        <span
+                          className={styles.peerAvatarMini}
+                          style={{ background: getPeerColor(peerId) }}
+                        >
+                          {peerId.slice(0, 2).toUpperCase()}
+                        </span>
+                        <span className={styles.peerPillText}>{peerId}</span>
+                        <IconCopy className={styles.peerCopyIcon} />
+                      </div>
+                    </Tooltip>
+                  ))
+                ) : (
+                  <span className={styles.noPeersHint}>No peers connected yet</span>
+                )}
+              </div>
+            </div>
           </div>
           {completedReceivedFiles.length > 1 && (
             <div className={styles.batchActions}>
               <Button
-                size="mini"
-                type="outline"
+                size="small"
+                type="primary"
+                status="success"
                 icon={<IconDownload />}
                 onClick={onDownloadAll}
+                className={styles.downloadAllBtn}
               >
                 Download All ({completedReceivedFiles.length})
               </Button>
@@ -602,126 +648,249 @@ export const TransferModal: FC<{
       onCancel={onCancel}
       maskClosable={false}
     >
+      {isDragging && (
+        <div className={styles.dragOverlay}>
+          <div className={styles.dragContent}>
+            <IconCloudDownload className={styles.dragIcon} />
+            <div className={styles.dragTitle}>Drop Files or Folders Here</div>
+            <div className={styles.dragSubtitle}>
+              Files will be broadcasted to all connected peers in real-time
+            </div>
+          </div>
+        </div>
+      )}
+
       {totalFiles > 1 && inProgressFiles > 0 && (
         <div className={styles.batchSummaryBar}>
           <div className={styles.batchInfo}>
             <span>
-              Transferring: <strong>{inProgressFiles}</strong> of{" "}
+              🚀 Transferring: <strong>{inProgressFiles}</strong> of{" "}
               <strong>{totalFiles}</strong> files active
             </span>
           </div>
         </div>
       )}
 
-      <div className={styles.modalContent} ref={listRef}>
-        {list.map((item, index) => (
-          <div
-            key={index}
-            className={cs(
-              styles.messageItem,
-              item.from === TRANSFER_FROM.SELF && styles.alignRight
-            )}
-          >
-            <div className={styles.messageContent}>
-              {item.from === TRANSFER_FROM.PEER && item.targetId && (
-                <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.75)", marginBottom: "3px" }}>
-                  {item.targetId}
-                </div>
-              )}
-              {item.key === TRANSFER_TYPE.TEXT ? (
-                <span>{item.data}</span>
-              ) : (
-                <div className={styles.fileMessage}>
-                  <div className={styles.fileHeader}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className={styles.fileName}>
-                        <IconFile className={styles.fileIcon} />
-                        <span>{item.name}</span>
-                      </div>
-                      <div className={styles.fileSubDetails}>
-                        <span>{formatBytes(item.size)}</span>
-                        {item.status === FILE_STATUS.TRANSFERRING && (
-                          <Fragment>
-                            {Boolean(item.speed) && (
-                              <span className={styles.telemetryBadge}>
-                                {formatSpeed(item.speed || 0)}
-                              </span>
-                            )}
-                            {Boolean(item.eta) && (
-                              <span className={styles.telemetryBadge}>{formatEta(item.eta || 0)}</span>
-                            )}
-                          </Fragment>
-                        )}
-                        {item.status === FILE_STATUS.PAUSED && (
-                          <span className={styles.telemetryBadge} style={{ background: "rgba(255, 125, 0, 0.4)" }}>
-                            Paused
-                          </span>
-                        )}
-                        {item.status === FILE_STATUS.VERIFYING && (
-                          <span className={styles.telemetryBadge} style={{ background: "rgba(22, 93, 255, 0.4)" }}>
-                            Verifying Checksum...
-                          </span>
-                        )}
-                        {item.status === FILE_STATUS.COMPLETED && (
-                          <span className={styles.telemetryBadge} style={{ background: "rgba(0, 180, 42, 0.4)" }}>
-                            Completed
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className={styles.fileActions}>
-                      {item.progress < 100 && (
-                        <Tooltip content={item.status === FILE_STATUS.PAUSED ? "Resume Transfer" : "Pause Transfer"}>
-                          <div
-                            className={styles.actionButton}
-                            onClick={() =>
-                              item.status === FILE_STATUS.PAUSED
-                                ? onResumeTransfer(item.id, item.targetId)
-                                : onPauseTransfer(item.id, item.targetId)
-                            }
-                          >
-                            {item.status === FILE_STATUS.PAUSED ? <IconPlayArrow /> : <IconPause />}
-                          </div>
-                        </Tooltip>
-                      )}
-                      {!stream && (
-                        <Tooltip content="Download File">
-                          <div
-                            className={cs(styles.actionButton, item.progress !== 100 && styles.disable)}
-                            onClick={() => item.progress === 100 && onDownloadFile(item.id, item.name)}
-                          >
-                            <IconToBottom />
-                          </div>
-                        </Tooltip>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className={styles.progressBarWrapper}>
-                    <Progress color="#fff" trailColor="rgba(255,255,255,0.3)" percent={item.progress}></Progress>
-                  </div>
-
-                  {Boolean(item.sha256) && (
-                    <div className={styles.hashIntegrityRow}>
-                      <div className={styles.hashLabel}>
-                        <IconCheckCircleFill style={{ color: "#00e676", fontSize: 12 }} />
-                        <span>SHA-256:</span>
-                      </div>
-                      <Tooltip content="Click to copy full SHA-256 checksum">
-                        <div className={styles.hashText} onClick={() => copyHash(item.sha256 || "")}>
-                          <span>{item.sha256?.slice(0, 10)}...{item.sha256?.slice(-6)}</span>
-                          <IconCopy style={{ marginLeft: 4, fontSize: 10 }} />
-                        </div>
-                      </Tooltip>
-                    </div>
-                  )}
-                </div>
-              )}
+      <div
+        className={styles.modalContent}
+        ref={listRef}
+        onDragEnter={() => peerIds.length > 0 && setIsDragging(true)}
+        onDragOver={e => e.preventDefault()}
+      >
+        {list.length === 0 ? (
+          <div className={styles.emptyStateContainer}>
+            <div className={styles.emptyIllustration}>
+              <div className={styles.radarPulse}></div>
+              <div className={styles.iconCircle}>
+                <IconUserGroup />
+              </div>
             </div>
+            <div className={styles.emptyTitle}>Group Mesh Connected</div>
+            <div className={styles.emptyDesc}>
+              {peerIds.length > 0
+                ? `Encrypted P2P connection established with ${peerIds.length} device${
+                    peerIds.length > 1 ? "s" : ""
+                  }. Share instant messages or transfer multiple files directly.`
+                : "Establish a connection with another device to start transferring."}
+            </div>
+            {enableTransfer && (
+              <div className={styles.emptyQuickActions}>
+                <Button
+                  type="outline"
+                  size="small"
+                  icon={<IconFile />}
+                  onClick={onSendFile}
+                  className={styles.quickActionBtn}
+                >
+                  Send Files
+                </Button>
+                <Button
+                  type="outline"
+                  size="small"
+                  icon={<IconFolder />}
+                  onClick={onSendFolder}
+                  className={styles.quickActionBtn}
+                >
+                  Send Folder
+                </Button>
+              </div>
+            )}
           </div>
-        ))}
+        ) : (
+          list.map((item, index) => {
+            const isSelf = item.from === TRANSFER_FROM.SELF;
+            return (
+              <div
+                key={index}
+                className={cs(
+                  styles.messageItem,
+                  isSelf ? styles.alignRight : styles.alignLeft
+                )}
+              >
+                {!isSelf && (
+                  <div
+                    className={styles.peerAvatar}
+                    style={{ background: getPeerColor(item.targetId || "peer") }}
+                  >
+                    {(item.targetId || "P").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+
+                <div className={styles.messageBubbleWrapper}>
+                  <div className={styles.messageMeta}>
+                    <span className={styles.senderName}>
+                      {isSelf ? "You" : item.targetId || "Peer"}
+                    </span>
+                    {item.time && <span className={styles.messageTime}>{item.time}</span>}
+                  </div>
+
+                  <div className={styles.messageContent}>
+                    {item.key === TRANSFER_TYPE.TEXT ? (
+                      <div className={styles.textMessage}>{item.data}</div>
+                    ) : (
+                      <div className={styles.fileMessage}>
+                        <div className={styles.fileHeader}>
+                          <div className={styles.fileIconBox}>
+                            <IconFile />
+                          </div>
+                          <div className={styles.fileMainDetails}>
+                            <div className={styles.fileName} title={item.name}>
+                              {item.name}
+                            </div>
+                            <div className={styles.fileSubDetails}>
+                              <span className={styles.fileSizeBadge}>
+                                {formatBytes(item.size)}
+                              </span>
+                              {item.status === FILE_STATUS.TRANSFERRING && (
+                                <Fragment>
+                                  {Boolean(item.speed) && (
+                                    <span className={styles.telemetryBadge}>
+                                      ⚡ {formatSpeed(item.speed || 0)}
+                                    </span>
+                                  )}
+                                  {Boolean(item.eta) && (
+                                    <span className={styles.telemetryBadge}>
+                                      ⏱️ {formatEta(item.eta || 0)}
+                                    </span>
+                                  )}
+                                </Fragment>
+                              )}
+                              {item.status === FILE_STATUS.PAUSED && (
+                                <span
+                                  className={cs(
+                                    styles.telemetryBadge,
+                                    styles.statusPaused
+                                  )}
+                                >
+                                  Paused
+                                </span>
+                              )}
+                              {item.status === FILE_STATUS.VERIFYING && (
+                                <span
+                                  className={cs(
+                                    styles.telemetryBadge,
+                                    styles.statusVerifying
+                                  )}
+                                >
+                                  Verifying Checksum...
+                                </span>
+                              )}
+                              {item.status === FILE_STATUS.COMPLETED && (
+                                <span
+                                  className={cs(
+                                    styles.telemetryBadge,
+                                    styles.statusCompleted
+                                  )}
+                                >
+                                  Completed
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className={styles.fileActions}>
+                            {item.progress < 100 && (
+                              <Tooltip
+                                content={
+                                  item.status === FILE_STATUS.PAUSED
+                                    ? "Resume Transfer"
+                                    : "Pause Transfer"
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  className={styles.actionButton}
+                                  onClick={() =>
+                                    item.status === FILE_STATUS.PAUSED
+                                      ? onResumeTransfer(item.id, item.targetId)
+                                      : onPauseTransfer(item.id, item.targetId)
+                                  }
+                                >
+                                  {item.status === FILE_STATUS.PAUSED ? (
+                                    <IconPlayArrow />
+                                  ) : (
+                                    <IconPause />
+                                  )}
+                                </button>
+                              </Tooltip>
+                            )}
+                            {!stream && (
+                              <Tooltip content="Download File">
+                                <button
+                                  type="button"
+                                  className={cs(
+                                    styles.actionButton,
+                                    item.progress !== 100 && styles.disable
+                                  )}
+                                  onClick={() =>
+                                    item.progress === 100 &&
+                                    onDownloadFile(item.id, item.name)
+                                  }
+                                >
+                                  <IconToBottom />
+                                </button>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className={styles.progressBarWrapper}>
+                          <Progress
+                            color={isSelf ? "#ffffff" : "#165dff"}
+                            trailColor="rgba(255,255,255,0.25)"
+                            percent={item.progress}
+                          />
+                        </div>
+
+                        {Boolean(item.sha256) && (
+                          <div className={styles.hashIntegrityRow}>
+                            <div className={styles.hashLabel}>
+                              <IconCheckCircleFill style={{ color: "#00e676" }} />
+                              <span>SHA-256 Verified</span>
+                            </div>
+                            <Tooltip content="Click to copy full SHA-256 checksum">
+                              <div
+                                className={styles.hashText}
+                                onClick={() => copyHash(item.sha256 || "")}
+                              >
+                                <span>
+                                  {item.sha256?.slice(0, 8)}...{item.sha256?.slice(-6)}
+                                </span>
+                                <IconCopy style={{ marginLeft: 4 }} />
+                              </div>
+                            </Tooltip>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
+
       <div
         className={styles.modalFooter}
         onDragEnter={() => peerIds.length > 0 && setIsDragging(true)}
@@ -730,69 +899,71 @@ export const TransferModal: FC<{
         onDragOver={e => e.preventDefault()}
       >
         {peerIds.length > 0 ? (
-          isDragging ? (
-            <Fragment>Drop Multiple Files or Folders To Upload</Fragment>
-          ) : (
-            <Fragment>
-              <div className={styles.sendFileGroup}>
-                <Tooltip content="Select multiple files">
-                  <Button
-                    disabled={!enableTransfer}
-                    type="primary"
-                    icon={<IconFile />}
-                    onClick={onSendFile}
-                  >
-                    Files
-                  </Button>
-                </Tooltip>
-                <Tooltip content="Select entire folder">
-                  <Button
-                    disabled={!enableTransfer}
-                    icon={<IconFolder />}
-                    onClick={onSendFolder}
-                  >
-                    Folder
-                  </Button>
-                </Tooltip>
-              </div>
-              <Input
-                value={text}
-                onChange={setText}
-                disabled={!enableTransfer}
-                allowClear
-                placeholder="Send Message or Drag & Drop Multiple Files"
-                onPressEnter={onSendText}
-              />
-              <Button
-                onClick={onSendText}
-                disabled={!enableTransfer}
-                type="primary"
-                status="success"
-                icon={<IconSend />}
-              >
-                Send
-              </Button>
-            </Fragment>
-          )
-        ) : (
           <Fragment>
+            <div className={styles.sendFileGroup}>
+              <Tooltip content="Select multiple files">
+                <Button
+                  disabled={!enableTransfer}
+                  type="primary"
+                  icon={<IconFile />}
+                  onClick={onSendFile}
+                  className={styles.attachBtn}
+                >
+                  Files
+                </Button>
+              </Tooltip>
+              <Tooltip content="Select entire folder">
+                <Button
+                  disabled={!enableTransfer}
+                  icon={<IconFolder />}
+                  onClick={onSendFolder}
+                  className={styles.attachBtn}
+                >
+                  Folder
+                </Button>
+              </Tooltip>
+            </div>
+            <Input
+              value={text}
+              onChange={setText}
+              disabled={!enableTransfer}
+              allowClear
+              placeholder="Send message or drag & drop files (Press Enter to send)"
+              onPressEnter={onSendText}
+              className={styles.chatInput}
+            />
+            <Button
+              onClick={onSendText}
+              disabled={!enableTransfer || !text.trim()}
+              type="primary"
+              status="success"
+              icon={<IconSend />}
+              className={styles.sendBtn}
+            >
+              Send
+            </Button>
+          </Fragment>
+        ) : (
+          <div className={styles.connectGroup}>
             <Input
               value={toConnectId}
               disabled={state === CONNECTION_STATE.CONNECTING}
               onChange={setToConnectId}
               allowClear
-              placeholder="Peer ID"
-              onPressEnter={onSendText}
+              placeholder="Enter Target Peer ID..."
+              onPressEnter={onConnectPeer}
+              className={styles.connectInput}
             />
             <Button
               onClick={onConnectPeer}
               disabled={!toConnectId || state === CONNECTION_STATE.CONNECTING}
               type="primary"
               icon={<IconRight />}
+              className={styles.connectBtn}
             >
               Connect
             </Button>
-          </Fragment>
+          </div>
         )}
       </div>
     </Modal>

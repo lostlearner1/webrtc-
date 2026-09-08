@@ -64,6 +64,7 @@ export type TransferTypeMap = {
     data: string;
     from: Object.Values<typeof TRANSFER_FROM>;
     targetId?: string;
+    time?: string;
   };
   [TRANSFER_TYPE.FILE]: Omit<FileMeta, "total"> & {
     name: string;
@@ -75,6 +76,7 @@ export type TransferTypeMap = {
     eta?: number; // seconds remaining
     sha256?: string;
     verified?: boolean;
+    time?: string;
   };
 };
 
