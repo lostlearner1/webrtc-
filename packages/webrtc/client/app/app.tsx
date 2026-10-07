@@ -186,6 +186,18 @@ export const App: FC = () => {
     }
   };
 
+  const onPasteId = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setManualInputId(text.trim());
+        Message.info("Pasted from clipboard");
+      }
+    } catch {
+      Message.warning("Could not read clipboard. Please paste manually.");
+    }
+  };
+
   const onManualConnect = () => {
     const target = manualInputId.trim();
     if (!target) return;
@@ -351,25 +363,45 @@ export const App: FC = () => {
       {/* === Connect by ID Modal === */}
       {manualModalVisible && (
         <Modal
+          className={styles.p2pModal}
           title="Direct P2P Connection"
           visible={manualModalVisible}
           onOk={onManualConnect}
           onCancel={() => setManualModalVisible(false)}
           okText="Connect"
+          cancelText="Cancel"
+          okButtonProps={{ icon: <IconThunderbolt /> }}
+          maskClosable={true}
         >
           <div className={styles.connectModalBody}>
             <div className={styles.modalDesc}>
               Enter the target peer's Device ID to establish a direct WebRTC peer-to-peer connection:
             </div>
-            <Input
-              value={manualInputId}
-              onChange={setManualInputId}
-              allowClear
-              placeholder="e.g. W4BU7bWq"
-              onPressEnter={onManualConnect}
-              className={styles.connectInput}
-              autoFocus
-            />
+            <div className={styles.inputWrapper}>
+              <Input
+                value={manualInputId}
+                onChange={setManualInputId}
+                allowClear
+                prefix={<IconThunderbolt style={{ color: "#165dff" }} />}
+                placeholder="e.g. W4BU7bWq"
+                onPressEnter={onManualConnect}
+                className={styles.connectInput}
+                autoFocus
+                addAfter={
+                  <Button
+                    size="small"
+                    type="text"
+                    onClick={onPasteId}
+                    className={styles.pasteBtn}
+                  >
+                    Paste
+                  </Button>
+                }
+              />
+            </div>
+            <div className={styles.modalTip}>
+              Tip: The recipient can find their Device ID at the bottom of their screen or in their QR Code.
+            </div>
           </div>
         </Modal>
       )}

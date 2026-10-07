@@ -124,6 +124,18 @@ export const QRCodeModal: FC<{
     a.click();
   };
 
+  const onCopyId = () => {
+    if (!id) return;
+    navigator.clipboard
+      .writeText(id)
+      .then(() => {
+        Message.success(`Device ID "${id}" copied to clipboard`);
+      })
+      .catch(() => {
+        Message.error("Failed to copy Device ID");
+      });
+  };
+
   return (
     <Modal
       className={styles.qrModal}
@@ -138,20 +150,36 @@ export const QRCodeModal: FC<{
           {qrUrl ? (
             <img src={qrUrl} alt="Pairing QR Code" className={styles.qrImage} />
           ) : (
-            <div style={{ width: 220, height: 220, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              Generating QR Code...
+            <div className={styles.qrLoading}>
+              <IconSync spin style={{ fontSize: 24, color: "#165dff" }} />
+              <span>Generating QR Code...</span>
             </div>
           )}
         </div>
-        <div className={styles.idBadge}>Device ID: {id}</div>
+        <Tooltip content="Click to copy your Device ID">
+          <div className={styles.idBadge} onClick={onCopyId}>
+            <span className={styles.idLabel}>Device ID:</span>
+            <span className={styles.idValue}>{id}</span>
+            <IconCopy className={styles.copyIcon} />
+          </div>
+        </Tooltip>
         <p className={styles.hint}>
           Scan this QR code from another device on your network to connect and transfer files instantly.
         </p>
         <div className={styles.actions}>
-          <Button type="primary" icon={<IconCopy />} onClick={onCopyLink}>
+          <Button
+            type="primary"
+            icon={<IconCopy />}
+            className={styles.copyBtn}
+            onClick={onCopyLink}
+          >
             Copy Link
           </Button>
-          <Button icon={<IconDownload />} onClick={onDownloadQR}>
+          <Button
+            icon={<IconDownload />}
+            className={styles.downloadBtn}
+            onClick={onDownloadQR}
+          >
             Save Image
           </Button>
         </div>

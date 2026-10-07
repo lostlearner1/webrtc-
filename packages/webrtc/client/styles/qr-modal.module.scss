@@ -1,7 +1,26 @@
 .qrModal {
   :global(.arco-modal) {
-    border-radius: 12px;
-    max-width: 90vw;
+    border-radius: 16px;
+    max-width: 92vw;
+    width: 440px;
+    overflow: hidden;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.16), 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+
+  :global(.arco-modal-header) {
+    border-bottom: 1px solid var(--color-border-1, #f2f3f5);
+    padding: 18px 24px;
+    
+    :global(.arco-modal-title) {
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--color-text-1, #1d2129);
+      letter-spacing: -0.2px;
+    }
+  }
+
+  :global(.arco-modal-body) {
+    padding: 24px;
   }
 }
 
@@ -9,40 +28,99 @@
   align-items: center;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 10px 0 6px;
+  gap: 18px;
 
   .qrWrapper {
     background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(22, 93, 255, 0.15);
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(22, 93, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
     display: flex;
     justify-content: center;
-    padding: 14px;
+    align-items: center;
+    padding: 16px;
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 36px rgba(22, 93, 255, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
 
     .qrImage {
-      border-radius: 6px;
+      border-radius: 8px;
       display: block;
       height: 220px;
       width: 220px;
     }
+
+    .qrLoading {
+      width: 220px;
+      height: 220px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text-3, #86909c);
+      font-size: 13px;
+      gap: 10px;
+    }
   }
 
   .idBadge {
-    background: var(--color-fill-2);
-    border-radius: 20px;
-    color: var(--color-text-1);
-    font-family: monospace;
-    font-size: 14px;
-    font-weight: 600;
+    align-items: center;
+    background: var(--color-fill-2, #f2f3f5);
+    border: 1px solid var(--color-border-2, #e5e6eb);
+    border-radius: 24px;
+    color: var(--color-text-1, #1d2129);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 13px;
+    gap: 8px;
     padding: 6px 16px;
+    transition: all 0.2s ease;
+    user-select: none;
+
+    .idLabel {
+      color: var(--color-text-3, #86909c);
+      font-weight: 500;
+    }
+
+    .idValue {
+      color: var(--color-primary-6, #165dff);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .copyIcon {
+      color: var(--color-text-3, #86909c);
+      font-size: 14px;
+      transition: color 0.2s ease, transform 0.2s ease;
+    }
+
+    &:hover {
+      background: rgba(22, 93, 255, 0.08);
+      border-color: rgba(22, 93, 255, 0.3);
+      transform: translateY(-1px);
+
+      .copyIcon {
+        color: #165dff;
+        transform: scale(1.15);
+      }
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
   }
 
   .hint {
-    color: var(--color-text-3);
+    color: var(--color-text-3, #86909c);
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.55;
     margin: 0;
+    max-width: 320px;
     text-align: center;
   }
 
@@ -52,8 +130,24 @@
     margin-top: 4px;
     width: 100%;
 
-    button {
+    .copyBtn {
+      flex: 1.2;
+      height: 38px;
+      border-radius: 8px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(22, 93, 255, 0.25);
+    }
+
+    .downloadBtn {
       flex: 1;
+      height: 38px;
+      border-radius: 8px;
+      font-weight: 500;
+      border-color: var(--color-border-2, #e5e6eb);
+
+      &:hover {
+        background: var(--color-fill-2, #f2f3f5);
+      }
     }
   }
 }
@@ -62,12 +156,12 @@
   align-items: center;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 6px 0;
+  gap: 16px;
 
   .videoWrapper {
-    background: #000000;
-    border-radius: 12px;
+    background: #0f172a;
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
     height: 280px;
     overflow: hidden;
     position: relative;
@@ -80,25 +174,26 @@
     }
 
     .reticle {
-      border: 2px dashed rgba(255, 255, 255, 0.7);
-      border-radius: 12px;
-      height: 180px;
+      border: 2px solid rgba(255, 255, 255, 0.85);
+      border-radius: 16px;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+      height: 190px;
       left: 50%;
       pointer-events: none;
       position: absolute;
       top: 50%;
       transform: translate(-50%, -50%);
-      width: 180px;
+      width: 190px;
 
       .laser {
-        animation: scan 2s linear infinite alternate;
+        animation: scan 2s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
         background: linear-gradient(
           to bottom,
-          rgba(var(--arcoblue-6), 0) 0%,
-          rgba(var(--arcoblue-6), 0.8) 50%,
-          rgba(var(--arcoblue-6), 1) 100%
+          rgba(22, 93, 255, 0) 0%,
+          rgba(22, 93, 255, 0.6) 50%,
+          #165dff 100%
         );
-        box-shadow: 0 0 8px rgba(var(--arcoblue-6), 0.8);
+        box-shadow: 0 0 12px #165dff;
         height: 2px;
         position: absolute;
         width: 100%;
@@ -106,32 +201,36 @@
     }
   }
 
-  .scannerControls {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
+  .scannerError {
+    background: rgba(245, 63, 63, 0.08);
+    border: 1px solid rgba(245, 63, 63, 0.2);
+    border-radius: 8px;
+    color: rgb(var(--red-6, 245, 63, 63));
+    font-size: 13px;
+    padding: 8px 14px;
+    text-align: center;
     width: 100%;
   }
 
-  .scannerError {
-    color: rgb(var(--red-6));
-    font-size: 13px;
-    text-align: center;
-  }
+  .scannerControls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    width: 100%;
 
-  .fileUploadTrigger {
-    color: rgba(var(--arcoblue-6), 0.9);
-    cursor: pointer;
-    font-size: 13px;
-    text-decoration: underline;
+    button {
+      flex: 1;
+      height: 38px;
+      border-radius: 8px;
+    }
   }
 }
 
 @keyframes scan {
   0% {
-    top: 0%;
+    top: 5%;
   }
   100% {
-    top: calc(100% - 2px);
+    top: 95%;
   }
 }

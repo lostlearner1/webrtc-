@@ -444,21 +444,107 @@ html {
   }
 }
 
-// === Connect ID Modal Inner ===
+// === Connect ID Modal ===
+.p2pModal {
+  :global(.arco-modal) {
+    border-radius: 16px;
+    max-width: 92vw;
+    width: 460px;
+    overflow: hidden;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.16), 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+
+  :global(.arco-modal-header) {
+    border-bottom: 1px solid var(--color-border-1, #f2f3f5);
+    padding: 18px 24px;
+
+    :global(.arco-modal-title) {
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--color-text-1, #1d2129);
+      letter-spacing: -0.2px;
+    }
+  }
+
+  :global(.arco-modal-body) {
+    padding: 24px;
+  }
+
+  :global(.arco-modal-footer) {
+    border-top: 1px solid var(--color-border-1, #f2f3f5);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+
+    :global(.arco-btn) {
+      border-radius: 8px;
+      height: 36px;
+      font-weight: 600;
+      padding: 0 18px;
+    }
+
+    :global(.arco-btn-primary) {
+      box-shadow: 0 4px 12px rgba(22, 93, 255, 0.25);
+    }
+  }
+}
+
 .connectModalBody {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 10px 0;
+  gap: 14px;
 
   .modalDesc {
-    color: var(--color-text-3, #86909c);
-    font-size: 13px;
+    color: var(--color-text-2, #4e5969);
+    font-size: 14px;
+    line-height: 1.5;
   }
 
-  .connectInput {
-    border-radius: 12px;
-    font-size: 14px;
+  .inputWrapper {
+    margin-top: 4px;
+
+    .connectInput {
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      border: 1px solid var(--color-border-2, #e5e6eb);
+      transition: all 0.2s ease;
+
+      &:hover, &:focus-within {
+        border-color: #165dff;
+        box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.15);
+      }
+
+      :global(.arco-input-inner-wrapper) {
+        border-radius: 10px;
+        height: 42px;
+      }
+    }
+
+    .pasteBtn {
+      color: #165dff;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 0 10px;
+      height: 28px;
+      margin-right: 4px;
+      cursor: pointer;
+
+      &:hover {
+        background: rgba(22, 93, 255, 0.08);
+      }
+    }
+  }
+
+  .modalTip {
+    color: var(--color-text-3, #86909c);
+    font-size: 12px;
+    line-height: 1.5;
+    background: var(--color-fill-2, #f2f3f5);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border-left: 3px solid #165dff;
   }
 }
 
